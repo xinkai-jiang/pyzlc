@@ -11,6 +11,26 @@ from ..utils.log import logger
 from ..nodes.loop_manager import LanComLoopManager
 from ..utils.msg import get_socket_addr
 
+
+def non_argument_func_wrapper(func: Callable) -> Callable:
+    """Wrap a function with no arguments to accept bytes and return bytes."""
+    def wrapper(_: bytes):
+        result = func()
+        if result is None:
+            return b""
+        return msgpack.packb(result, use_bin_type=True)
+    return wrapper
+
+def argument_func_wrapper(func: Callable) -> Callable:
+    """Wrap a function with one argument to accept bytes and return bytes."""
+    def wrapper(request_bytes: bytes):
+        arg = msgpack.unpackb(request_bytes, raw=False)
+        result = func(arg)
+        if result is None:
+            return b""
+        return msgpack.packb(result, use_bin_type=True)
+    return wrapper
+
 class ServiceManager:
     """Manages services using a REP socket."""
 
@@ -29,40 +49,17 @@ class ServiceManager:
         )
 
     def register_service(self, service_name: str, handler: Callable) -> None:
-
+        """Register a service with a given name and handler function."""
         sig = inspect.signature(handler)
         params = list(sig.parameters.values())
-        rets = sig.return_annotation
-
-        # -------- helper: auto convert return --------
-        def pack_result(result) -> bytes:
-            # None → msgpack nil
-            return msgpack.packb(result, use_bin_type=True)
-
-        # -------- handler with NO params --------
         if len(params) == 0:
-            def wrapper(request_bytes: bytes) -> bytes:
-                result = handler()
-                return pack_result(result)
-
-        # -------- handler with ONE param --------
+            self.callable_services[service_name] = non_argument_func_wrapper(handler)
         elif len(params) == 1:
-            def wrapper(request_bytes: bytes) -> bytes:
-                if request_bytes == b"":
-                    raise ValueError(f"Service '{service_name}' expects a parameter")
-
-                arg = msgpack.unpackb(request_bytes, raw=False)
-                result = handler(arg)
-                return pack_result(result)
-
+            self.callable_services[service_name] = argument_func_wrapper(handler)
         else:
             raise TypeError(
                 f"Service '{service_name}' handler must have 0 or 1 parameter."
             )
-
-        self.callable_services[service_name] = wrapper
-
-
 
     async def service_loop(
         self,
@@ -75,28 +72,20 @@ class ServiceManager:
                 name_bytes, request = await service_socket.recv_multipart()
             except Exception as e:
                 logger.error("Error occurred when receiving request: %s", e)
+                raise e
+            finally:
                 traceback.print_exc()
             service_name = name_bytes.decode()
             if service_name not in services.keys():
                 logger.error("Service %s is not available", service_name)
                 continue
             try:
-                result = None
-                if request == b"":
-                    result = await asyncio.wait_for(
-                        self.loop_manager.run_in_executor(
-                            services[service_name]
-                        ),
-                        timeout=2.0,
-                    )
-                else:
-                    unpacked = msgpack.unpackb(request, strict_map_key=False, raw=False)
-                    result = await asyncio.wait_for(
-                        self.loop_manager.run_in_executor(
-                            services[service_name], unpacked
-                        ),
-                        timeout=2.0,
-                    )
+                result = await asyncio.wait_for(
+                    self.loop_manager.run_in_executor(
+                        services[service_name], request
+                    ),
+                    timeout=2.0,
+                )
                 packed_result = msgpack.packb(result, use_bin_type=True)
                 await service_socket.send(packed_result)
             except asyncio.TimeoutError:
@@ -112,4 +101,5 @@ class ServiceManager:
                 )
                 traceback.print_exc()
                 await service_socket.send_string("ERROR")
+                raise e
         logger.info("Service loop has been stopped")

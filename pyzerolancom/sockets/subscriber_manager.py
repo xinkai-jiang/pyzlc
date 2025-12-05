@@ -3,7 +3,6 @@ from typing import Callable, Dict, List
 import zmq.asyncio
 import msgpack
 
-from .publisher import MessageT
 from ..nodes.zmq_socket_manager import ZMQSocketManager
 from ..utils.log import logger
 from ..nodes.lancom_node import LanComNode
@@ -15,7 +14,7 @@ class Subscriber:
     def __init__(
         self,
         topic_name: str,
-        callback: Callable[[MessageT], None],
+        callback: Callable,
     ):
         self._socket = ZMQSocketManager.get_instance().create_async_socket(zmq.SUB)
         self.name = topic_name

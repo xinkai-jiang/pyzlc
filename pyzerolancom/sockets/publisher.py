@@ -3,28 +3,16 @@ from __future__ import annotations
 import time
 import traceback
 from asyncio import sleep as async_sleep
-from json import dumps
-from typing import Callable, Dict, TypeVar, cast
+from typing import Callable, Dict
 
-from ..nodes.zmq_socket_manager import ZMQSocketManager
 import zmq
 import msgpack
 
-from ..utils.node_info import (
-    LANCOM_PUB,
-    LANCOM_SRV,
-    HashIdentifier,
-    SocketInfo,
-    SocketTypeEnum,
-)
+from ..nodes.zmq_socket_manager import ZMQSocketManager
 from ..utils.log import logger
-from ..utils.msg import send_bytes_request
 from ..nodes.lancom_node import LanComNode
 from ..nodes.loop_manager import LanComLoopManager
 
-MessageT = TypeVar("MessageT", bytes, str, dict)
-RequestT = TypeVar("RequestT", bytes, str, dict)
-ResponseT = TypeVar("ResponseT", bytes, str, dict)
 
 
 class Publisher:
@@ -134,25 +122,4 @@ class Streamer:
 #         logger.info(f'"{self.name}" Service is stopped')
 
 
-# class ServiceProxy:
-#     @staticmethod
-#     def request(
-#         service_name: str,
-#         request_encoder: Callable[[RequestT], bytes],
-#         response_decoder: Callable[[bytes], ResponseT],
-#         request: RequestT,
-#     ) -> Optional[ResponseT]:
-#         if LanComNode.instance is None:
-#             raise ValueError("Lancom Node is not initialized")
-#         node = LanComNode.instance
-#         service_component = node.nodes_map.get_service_info(service_name)
-#         if service_component is None:
-#             logger.warning(f"Service {service_name} is not exist")
-#             return None
-#         request_bytes = request_encoder(request)
-#         addr = f"tcp://{service_component['ip']}:{service_component['port']}"
-#         response = node.loop_manager.submit_loop_task(
-#             send_bytes_request(addr, service_name, request_bytes),
-#             True,
-#         )
-#         return response_decoder(cast(bytes, response))
+

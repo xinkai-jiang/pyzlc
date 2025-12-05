@@ -7,7 +7,7 @@ import time
 import traceback
 from asyncio import AbstractEventLoop
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Coroutine, Optional, Union
+from typing import Any, Coroutine, Optional, Union, Callable
 
 from ..utils.log import logger
 
@@ -77,7 +77,7 @@ class LanComLoopManager(abc.ABC):
 
     async def run_in_executor(
         self,
-        func: Coroutine[Any, Any, Any],
+        func: Callable,
         *args: Any,
         **kwargs: Any,
     ) -> Any:
