@@ -4,7 +4,7 @@ import multiprocessing as mp
 
 import pytest
 
-from pylancom.utils.lancom_type import IPAddress, NodeInfo
+from pylancom.utils.node_info import IPAddress, NodeInfo
 from pylancom.nodes.abstract_node import AbstractNode
 
 # Configure logging

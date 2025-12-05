@@ -4,8 +4,9 @@ import traceback
 import asyncio
 import zmq.asyncio
 import msgpack
+import inspect
 
-from ..utils.lancom_type import AsyncSocket
+from ..utils.node_info import AsyncSocket
 from ..utils.log import logger
 from .loop_manager import LanComLoopManager
 from ..utils.msg import get_socket_addr
@@ -27,9 +28,40 @@ class ServiceManager:
             self.service_loop(self.res_socket, self.callable_services)
         )
 
-    def register_service(self, service_name: str, handler: Callable[[Any], Any]) -> None:
-        """Register a service with a handler function."""
-        self.callable_services[service_name] = handler
+    def register_service(self, service_name: str, handler: Callable) -> None:
+
+        sig = inspect.signature(handler)
+        params = list(sig.parameters.values())
+        rets = sig.return_annotation
+
+        # -------- helper: auto convert return --------
+        def pack_result(result) -> bytes:
+            # None → msgpack nil
+            return msgpack.packb(result, use_bin_type=True)
+
+        # -------- handler with NO params --------
+        if len(params) == 0:
+            def wrapper(request_bytes: bytes) -> bytes:
+                result = handler()
+                return pack_result(result)
+
+        # -------- handler with ONE param --------
+        elif len(params) == 1:
+            def wrapper(request_bytes: bytes) -> bytes:
+                if request_bytes == b"":
+                    raise ValueError(f"Service '{service_name}' expects a parameter")
+
+                arg = msgpack.unpackb(request_bytes, raw=False)
+                result = handler(arg)
+                return pack_result(result)
+
+        else:
+            raise TypeError(
+                f"Service '{service_name}' handler must have 0 or 1 parameter."
+            )
+
+        self.callable_services[service_name] = wrapper
+
 
 
     async def service_loop(

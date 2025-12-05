@@ -8,11 +8,11 @@ import struct
 import time
 import zmq
 
-from ..utils.lancom_type import IPAddress
+from ..utils.node_info import IPAddress
 from ..utils.log import logger
 from ..utils.msg import create_hash_identifier
 from .loop_manager import LanComLoopManager
-from ..utils.lancom_type import NodeInfo
+from ..utils.node_info import NodeInfo
 from .nodes_info_manager import NodesInfoManager
 from .zmq_socket_manager import ZMQSocketManager, PUB
 from .service_manager import ServiceManager
@@ -152,6 +152,7 @@ class LanComNode:
         self.loop_manager.submit_loop_task(self.discovery_loop())
 
     def spin(self) -> None:
+        """Start the node's event loop."""
         try:
             self._running = True
             self.loop_manager.spin()
@@ -162,6 +163,7 @@ class LanComNode:
 
 
     async def multicast_loop(self, interval=1.0):
+        """Send multicast heartbeat messages at regular intervals."""
         self._running = True
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)

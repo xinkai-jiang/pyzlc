@@ -41,3 +41,20 @@ class NodeInfo(TypedDict):
     port: Port
     topics: List[SocketInfo]
     services: List[SocketInfo]
+    
+    
+# class SocketInfo(TypedDict):
+#     """Information about a socket."""
+#     name: str 
+#     port: int
+
+
+# class NodeInfo(TypedDict):
+#     """Information about a node."""
+#     name: str
+#     nodeID: str
+#     infoID: int
+#     ip: IPAddress
+#     port: int
+#     topics: List[SocketInfo]
+#     services: List[SocketInfo]

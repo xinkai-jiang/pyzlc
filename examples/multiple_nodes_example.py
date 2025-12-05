@@ -2,7 +2,7 @@ import logging
 import multiprocessing as mp
 import time
 
-from pylancom.utils.lancom_type import IPAddress
+from pylancom.utils.node_info import IPAddress
 from pylancom.nodes.abstract_node import AbstractNode
 
 # Configure logging

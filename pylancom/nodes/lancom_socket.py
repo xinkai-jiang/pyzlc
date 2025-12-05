@@ -8,7 +8,7 @@ from typing import Callable, Optional, TypeVar, cast
 
 from .zmq_socket_manager import ZMQSocketManager
 
-from ..utils.lancom_type import (
+from ..utils.node_info import (
     LANCOM_PUB,
     LANCOM_SRV,
     HashIdentifier,
@@ -172,58 +172,58 @@ class Subscriber(LanComSocketBase):
         self.socket.close()
 
 
-class Service(LanComSocketBase):
-    def __init__(
-        self,
-        service_name: str,
-        request_decoder: Callable[[bytes], RequestT],
-        response_encoder: Callable[[ResponseT], bytes],
-        callback: Callable[[RequestT], ResponseT],
-    ) -> None:
-        super().__init__(service_name, LANCOM_SRV, False)
-        # check the service is already registered locally
-        for service_info in self.node.local_info["srvList"]:
-            if service_info["name"] != self.name:
-                continue
-            raise RuntimeError("Service has been registered locally")
-        if self.node.nodes_map.get_service_info(service_name) is not None:
-            raise RuntimeError("Service has been registered")
-        self.node.local_info["srvList"].append(self.info)
-        self.node.local_info["infoID"] += 1
-        self.handle_request = callback
-        self.request_decoder = request_decoder
-        self.response_encoder = response_encoder
-        logger.info(f'"{self.name}" Service is started')
+# class Service(LanComSocketBase):
+#     def __init__(
+#         self,
+#         service_name: str,
+#         request_decoder: Callable[[bytes], RequestT],
+#         response_encoder: Callable[[ResponseT], bytes],
+#         callback: Callable[[RequestT], ResponseT],
+#     ) -> None:
+#         super().__init__(service_name, LANCOM_SRV, False)
+#         # check the service is already registered locally
+#         for service_info in self.node.local_info["srvList"]:
+#             if service_info["name"] != self.name:
+#                 continue
+#             raise RuntimeError("Service has been registered locally")
+#         if self.node.nodes_map.get_service_info(service_name) is not None:
+#             raise RuntimeError("Service has been registered")
+#         self.node.local_info["srvList"].append(self.info)
+#         self.node.local_info["infoID"] += 1
+#         self.handle_request = callback
+#         self.request_decoder = request_decoder
+#         self.response_encoder = response_encoder
+#         logger.info(f'"{self.name}" Service is started')
 
-    def callback(self, msg: bytes) -> bytes:
-        request = self.request_decoder(msg)
-        result = self.handle_request(request)
-        return self.response_encoder(result)
+#     def callback(self, msg: bytes) -> bytes:
+#         request = self.request_decoder(msg)
+#         result = self.handle_request(request)
+#         return self.response_encoder(result)
 
-    def on_shutdown(self):
-        self.node.local_info["srvList"].remove(self.info)
-        logger.info(f'"{self.name}" Service is stopped')
+#     def on_shutdown(self):
+#         self.node.local_info["srvList"].remove(self.info)
+#         logger.info(f'"{self.name}" Service is stopped')
 
 
-class ServiceProxy:
-    @staticmethod
-    def request(
-        service_name: str,
-        request_encoder: Callable[[RequestT], bytes],
-        response_decoder: Callable[[bytes], ResponseT],
-        request: RequestT,
-    ) -> Optional[ResponseT]:
-        if LanComNode.instance is None:
-            raise ValueError("Lancom Node is not initialized")
-        node = LanComNode.instance
-        service_component = node.nodes_map.get_service_info(service_name)
-        if service_component is None:
-            logger.warning(f"Service {service_name} is not exist")
-            return None
-        request_bytes = request_encoder(request)
-        addr = f"tcp://{service_component['ip']}:{service_component['port']}"
-        response = node.loop_manager.submit_loop_task(
-            send_bytes_request(addr, service_name, request_bytes),
-            True,
-        )
-        return response_decoder(cast(bytes, response))
+# class ServiceProxy:
+#     @staticmethod
+#     def request(
+#         service_name: str,
+#         request_encoder: Callable[[RequestT], bytes],
+#         response_decoder: Callable[[bytes], ResponseT],
+#         request: RequestT,
+#     ) -> Optional[ResponseT]:
+#         if LanComNode.instance is None:
+#             raise ValueError("Lancom Node is not initialized")
+#         node = LanComNode.instance
+#         service_component = node.nodes_map.get_service_info(service_name)
+#         if service_component is None:
+#             logger.warning(f"Service {service_name} is not exist")
+#             return None
+#         request_bytes = request_encoder(request)
+#         addr = f"tcp://{service_component['ip']}:{service_component['port']}"
+#         response = node.loop_manager.submit_loop_task(
+#             send_bytes_request(addr, service_name, request_bytes),
+#             True,
+#         )
+#         return response_decoder(cast(bytes, response))

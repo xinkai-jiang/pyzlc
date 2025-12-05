@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 import traceback
 import msgpack
 
-from ..utils.lancom_type import (
+from ..utils.node_info import (
     NodeInfo,
     SocketInfo,
     TopicName,
