@@ -60,6 +60,7 @@ class ServiceManager:
             raise TypeError(
                 f"Service '{service_name}' handler must have 0 or 1 parameter."
             )
+        logger.info("Service '%s' registered.", service_name)
 
     async def service_loop(
         self,

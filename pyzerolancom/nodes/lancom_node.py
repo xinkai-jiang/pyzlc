@@ -92,6 +92,7 @@ class MulticastDiscoveryProtocol(asyncio.DatagramProtocol):
         except Exception as e:
             logger.error("Error processing datagram: %s", e)
             traceback.print_exc()
+            raise e
 
     def error_received(self, exc):
         logger.error("Multicast protocol error: %s", exc)
@@ -161,29 +162,30 @@ class LanComNode:
             except Exception as e:
                 logger.error("Error in multicast loop: %s", e)
                 traceback.print_exc()
-                break
+                raise e
         sock.close()
 
     async def discovery_loop(self):
         """Listen for multicast discovery messages and register nodes."""
         # Create multicast socket
-        sock = socket.socket(
-            socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP
-        )
-        # Allow reuse of address
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        # Bind to the port
-        sock.bind(("", self.group_port))
-        mreq = struct.pack(
-            "4s4s",
-            socket.inet_aton(self.group),
-            socket.inet_aton(self.node_ip),
-        )
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-        logger.info("Listening for multicast on %s:%s", self.group, self.group_port)
-        # Get event loop and create datagram endpoint
-        loop = asyncio.get_event_loop()
         try:
+            sock = socket.socket(
+                socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP
+            )
+            # Allow reuse of address
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            # Bind to the port
+            sock.bind(("", self.group_port))
+            mreq = struct.pack(
+                "4s4s",
+                socket.inet_aton(self.group),
+                socket.inet_aton(self.node_ip),
+            )
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+            logger.info("Listening for multicast on %s:%s", self.group, self.group_port)
+            # Get event loop and create datagram endpoint
+            loop = asyncio.get_event_loop()
             # Create the datagram endpoint with the protocol
             self.discovery_transport, _ = await loop.create_datagram_endpoint(
                 lambda: MulticastDiscoveryProtocol(self), sock=sock
@@ -198,6 +200,7 @@ class LanComNode:
         except Exception as e:
             logger.error("Error in discovery loop: %s", e)
             traceback.print_exc()
+            raise e
         finally:
             # Clean up
             if self.discovery_transport:

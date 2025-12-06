@@ -144,7 +144,7 @@ def encode_node_info(info: NodeInfo) -> bytes:
 def decode_socket_info(reader: BinReader, ip: str) -> SocketInfo:
     """Decode SocketInfo from bytes."""
     name = reader.read_string()
-    port = reader.read_u32()
+    port = reader.read_u16()
     return SocketInfo(name=name, ip=ip, port=port)
 
 def decode_node_info(data: bytes) -> NodeInfo:

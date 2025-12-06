@@ -30,6 +30,7 @@ class LanComLoopManager(abc.ABC):
         Args:
             max_workers (int, optional): The maximum number of worker threads. Defaults to 3.
         """
+        LanComLoopManager.instance = self
         self._loop: Optional[AbstractEventLoop] = None
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._executor.submit(self.spin_task)
@@ -51,6 +52,7 @@ class LanComLoopManager(abc.ABC):
             logger.error("Unexpected error in thread_task: %s", e)
             traceback.print_exc()
             self.stop_node()
+            raise e
         finally:
             if self._loop is not None:
                 self._loop.close()

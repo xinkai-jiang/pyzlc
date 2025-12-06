@@ -30,20 +30,18 @@ def start_node_task(num: int):
 
 
 if __name__ == "__main__":
-    node_tasks: list[mp.Process] = []
-    # test_node_task = mp.Process(target=start_test_node)
-    # node_tasks.append(test_node_task)
-    # test_node_task.start()
-    try:
-        for i in range(2):
-            task = mp.Process(target=start_node_task, args=(i,))
-            task.start()
-            node_tasks.append(task)
-            time.sleep(random.random())
-        print("All nodes have been started")
-        for task in node_tasks:
-            task.join()
-    except KeyboardInterrupt:
-        for task in node_tasks:
-            task.terminate()
-        print("All nodes have been terminated")
+    start_test_node()
+    # node_tasks = []
+    # try:
+    #     for i in range(2):
+    #         task = mp.Process(target=start_node_task, args=(i,))
+    #         task.start()
+    #         node_tasks.append(task)
+    #         time.sleep(random.random())
+    #     print("All nodes have been started")
+    #     for task in node_tasks:
+    #         task.join()
+    # except KeyboardInterrupt:
+    #     for task in node_tasks:
+    #         task.terminate()
+    #     print("All nodes have been terminated")
