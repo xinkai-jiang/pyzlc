@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Dict, List, Optional
+import time
 
 from ..utils.node_info import (
     NodeInfo,
@@ -25,9 +27,10 @@ class NodesInfoManager:
 
     def __init__(self):
         NodesInfoManager._instance = self
+        self.running = True
         self.nodes_info: Dict[HashIdentifier, NodeInfo] = {}
         self.nodes_info_id: Dict[HashIdentifier, int] = {}
-        self.nodes_heartbeat: Dict[HashIdentifier, str] = {}
+        self.nodes_heartbeat: Dict[HashIdentifier, float] = {}
 
     def check_node(self, node_id: HashIdentifier) -> bool:
         """Check if a node with the given ID exists."""
@@ -37,25 +40,22 @@ class NodesInfoManager:
         """Check if the info ID for a given node matches the provided info ID."""
         return self.nodes_info_id.get(node_id, "") == info_id
 
-    def check_multicast_message(self, node_id: HashIdentifier, info_id: int) -> bool:
-        """Check if the heartbeat for a given node is valid."""
-        return self.check_node(node_id) and self.check_info(node_id, info_id)
-
     def update_node(self, node_info: NodeInfo):
         """Update or add a node's information."""
-        if node_info["nodeID"] in self.nodes_info:
+        if not self.check_node(node_info["nodeID"]):
             logger.info("Node %s has been updated", node_info["name"])
-        else:
-            logger.info("Node %s has been added", node_info["name"])
-        self.nodes_info[node_info["nodeID"]] = node_info
-        self.nodes_info_id[node_info["nodeID"]] = node_info["infoID"]
-        self.nodes_heartbeat[node_info["nodeID"]] = node_info["ip"]
+        node_id = node_info["nodeID"]
+        if not self.check_info(node_info["nodeID"], node_info["infoID"]):
+            self.nodes_info[node_id] = node_info
+            self.nodes_info_id[node_id] = node_info["infoID"]
+        self.nodes_heartbeat[node_id] = time.monotonic()
+
 
     def remove_node(self, node_id: HashIdentifier) -> None:
         """Remove a node's information."""
-        self.nodes_info.pop(node_id, None)
-        self.nodes_info_id.pop(node_id, None)
-        self.nodes_heartbeat.pop(node_id, None)
+        self.nodes_info.pop(node_id)
+        self.nodes_info_id.pop(node_id)
+        self.nodes_heartbeat.pop(node_id)
 
     def get_publisher_info(self, topic_name: TopicName) -> List[SocketInfo]:
         """Get a list of publisher socket information for a given topic name."""
@@ -73,6 +73,18 @@ class NodesInfoManager:
                 if service["name"] == service_name:
                     return service
         return None
+
+    async def check_heartbeat(self) -> None:
+        """Periodically check the heartbeat of nodes."""
+        while self.running:
+            for node_id, last_heartbeat in self.nodes_heartbeat.items():
+                if time.monotonic() - last_heartbeat > 3:
+                    logger.warning(
+                        "Node %s is considered offline", self.nodes_info[node_id]["name"]
+                    )
+                    self.remove_node(node_id)
+            await asyncio.sleep(1)
+
 
 class LocalNodeInfo:
     """Holds local node information."""

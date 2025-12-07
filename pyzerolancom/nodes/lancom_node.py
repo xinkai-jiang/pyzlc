@@ -39,8 +39,7 @@ class MulticastDiscoveryProtocol(asyncio.DatagramProtocol):
             node_ip = addr[0]
             node_info = decode_node_info(data)
             node_info["ip"] = node_ip
-            if not self.node_info_manager.check_info(node_info["nodeID"], node_info["infoID"]):
-                self.node_info_manager.update_node(node_info)
+            self.node_info_manager.update_node(node_info)
         except Exception as e:
             logger.error("Error processing datagram: %s", e)
             traceback.print_exc()
@@ -91,6 +90,7 @@ class LanComNode:
         # add tasks to the event loop
         self.multicast_future = self.loop_manager.submit_loop_task(self.multicast_loop())
         self.discovery_future = self.loop_manager.submit_loop_task(self.discovery_loop())
+        self.heartbeat_future = self.loop_manager.submit_loop_task(self.nodes_manager.check_heartbeat())
 
     def spin(self) -> None:
         """Start the node's event loop."""
@@ -103,6 +103,7 @@ class LanComNode:
             self.service_manager.stop()
             self.multicast_future.cancel()
             self.discovery_future.cancel()
+            self.heartbeat_future.cancel()
             self.loop_manager.stop()
         finally:
             logger.info("LanCom node has been stopped")
