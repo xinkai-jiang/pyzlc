@@ -8,10 +8,11 @@ import traceback
 import threading
 from asyncio import AbstractEventLoop
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Coroutine, Optional, Callable, Union
+from typing import Any, Coroutine, Optional, Callable, Union, TypeVar
 
 from ..utils.log import _logger
 
+TaskReturnT = TypeVar("TaskReturnT")
 
 class LanComLoopManager(abc.ABC):
     """Manages the event loop and thread pool for asynchronous tasks."""
@@ -110,23 +111,39 @@ class LanComLoopManager(abc.ABC):
 
     def submit_loop_task(
         self,
-        task: Coroutine,
-        block: bool = False,
-    ) -> Union[concurrent.futures.Future, Any]:
+        task: Coroutine[Any, Any, TaskReturnT],
+    ) -> concurrent.futures.Future:
         """Submit a coroutine task to the event loop.
 
         Args:
-            task (Coroutine): The coroutine task to be submitted.
+            task (Coroutine[Any, Any, TaskReturnT]): The coroutine task to be submitted.
             block (bool, optional): Whether to block until the task is complete. Defaults to False.
         Raises:
             RuntimeError: If the event loop is not running.
 
         Returns:
-            Union[concurrent.futures.Future, Any]: The future representing the execution of the coroutine.
+            Union[concurrent.futures.Future, TaskReturnT]: The future representing the execution of the coroutine.
+        """
+        if not self._loop:
+            raise RuntimeError("The event loop is not running")
+        return asyncio.run_coroutine_threadsafe(task, self._loop)
+
+    def submit_loop_task_and_wait(
+        self,
+        task: Coroutine[Any, Any, TaskReturnT]
+    ) -> TaskReturnT:
+        """Submit a coroutine task to the event loop.
+
+        Args:
+            task (Coroutine[Any, Any, TaskReturnT]): The coroutine task to be submitted.
+            block (bool, optional): Whether to block until the task is complete. Defaults to False.
+        Raises:
+            RuntimeError: If the event loop is not running.
+
+        Returns:
+            Union[concurrent.futures.Future, TaskReturnT]: The future representing the execution of the coroutine.
         """
         if not self._loop:
             raise RuntimeError("The event loop is not running")
         future = asyncio.run_coroutine_threadsafe(task, self._loop)
-        if block:
-            return future.result()
-        return future
+        return future.result()

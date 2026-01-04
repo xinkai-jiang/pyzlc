@@ -34,6 +34,13 @@ class NodesInfoManager:
         self.nodes_info_id: Dict[HashIdentifier, int] = {}
         self.nodes_heartbeat: Dict[HashIdentifier, float] = {}
 
+    def check_node_by_name(self, node_name: str) -> Optional[NodeInfo]:
+        """Check if a node with the given name exists."""
+        for node_info in self.nodes_info.values():
+            if node_info["name"] == node_name:
+                return node_info
+        return None
+
     def check_node(self, node_id: HashIdentifier) -> bool:
         """Check if a node with the given ID exists."""
         return node_id in self.nodes_info

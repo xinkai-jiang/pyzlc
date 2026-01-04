@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import traceback
-from typing import Optional, Callable, Any
+from typing import Optional
 import socket
 import struct
-import time
 
 from ..utils.log import _logger
 
@@ -13,10 +12,8 @@ from .loop_manager import LanComLoopManager
 from .nodes_info_manager import NodesInfoManager, LocalNodeInfo
 from .zmq_socket_manager import ZMQSocketManager
 from ..sockets.service_manager import ServiceManager
-from ..sockets.service_client import ServiceProxy
 from ..utils.node_info import decode_node_info
 from ..sockets.subscriber_manager import SubscriberManager
-from ..utils.msg import Request, Response
 
 
 # NOTE: asyncio.loop.sock_recvfrom can only be used after Python 3.11

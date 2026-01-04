@@ -27,7 +27,7 @@ class Subscriber:
         self.running: bool = True
         self.connected: bool = False
         self.published_urls: List[str] = []
-        self.loop_manager.submit_loop_task(self.listen_loop(), False)
+        self.loop_manager.submit_loop_task(self.listen_loop())
 
     def connect(self, url: str) -> None:
         """Connect to a publisher's socket."""
@@ -36,7 +36,7 @@ class Subscriber:
         self.published_urls.append(url)
         _logger.info("Subscriber %s is connected to %s", self.name, url)
         if len(self.published_urls) == 1:
-            self.loop_manager.submit_loop_task(self.receive_loop(), False)
+            self.loop_manager.submit_loop_task(self.receive_loop())
 
     async def listen_loop(self) -> None:
         """Listens for new publishers and connects to them."""

@@ -2,7 +2,7 @@ import asyncio
 import socket
 import struct
 import uuid
-from typing import Optional, Union, Dict, Tuple
+from typing import Optional, Union, Dict, Tuple, List
 
 import zmq
 import zmq.asyncio
@@ -10,9 +10,9 @@ import zmq.asyncio
 from .node_info import HashIdentifier
 from .log import _logger
 
-Message = Union[Dict, str]
-Request = Union[Dict, str]
-Response = Union[Dict, str]
+MessageT = Union[Dict, str]
+RequestT = Union[Dict, str]
+ResponseT = Union[Dict, str]
 
 
 def create_hash_identifier() -> HashIdentifier:
@@ -45,7 +45,7 @@ def calculate_broadcast_addr(ip_addr: str) -> str:
 
 async def send_bytes_request(
     addr: str, service_name: str, bytes_msgs: bytes, timeout: float = 1.0
-) -> Optional[bytes]:
+) -> Optional[List[bytes]]:
     """Send a bytes request to the specified address and return the response."""
     response = None
     try:
@@ -53,12 +53,12 @@ async def send_bytes_request(
         sock.connect(addr)
         # Send the message; you can also wrap this in wait_for if needed.
         await sock.send_multipart([service_name.encode(), bytes_msgs])
-
         # Wait for a response with a timeout.
-        response = await asyncio.wait_for(sock.recv(), timeout=timeout)
+        response = await asyncio.wait_for(sock.recv_multipart(), timeout=timeout)
     except asyncio.TimeoutError:
         _logger.error("Request %s timed out for %s s.", service_name, timeout)
     finally:
         sock.disconnect(addr)
         sock.close()
+    assert response is None or len(response) == 2, "Invalid response format"
     return response

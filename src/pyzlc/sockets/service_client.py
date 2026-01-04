@@ -6,7 +6,7 @@ import msgpack
 from ..nodes.nodes_info_manager import NodesInfoManager
 from ..nodes.loop_manager import LanComLoopManager
 from ..utils.log import _logger
-from ..utils.msg import send_bytes_request, Response, Request
+from ..utils.msg import send_bytes_request, ResponseT, RequestT
 
 
 class ServiceProxy:
@@ -15,8 +15,8 @@ class ServiceProxy:
     @staticmethod
     def request(
         service_name: str,
-        request: Request,
-    ) -> Optional[Response]:
+        request: RequestT,
+    ) -> Optional[ResponseT]:
         """Send a request to a service and get the response."""
         nodes_manager = NodesInfoManager.get_instance()
         loop_manager = LanComLoopManager.get_instance()
@@ -29,8 +29,8 @@ class ServiceProxy:
         if request_bytes is None:
             _logger.error("Failed to pack request for service %s", service_name)
             return None
-        response = loop_manager.submit_loop_task(
+        response = loop_manager.submit_loop_task_and_wait(
             send_bytes_request(addr, service_name, request_bytes),
-            True,
         )
-        return msgpack.unpackb(response)
+        # TODO: check the status of response
+        return msgpack.unpackb(response[1]) if response else None

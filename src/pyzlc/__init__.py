@@ -7,7 +7,7 @@ import time
 
 # from pyzlc.abstract_node import AbstractNode
 from .nodes.lancom_node import LanComNode
-from .nodes.nodes_info_manager import NodeInfo, LocalNodeInfo
+from .nodes.nodes_info_manager import NodeInfo, LocalNodeInfo, NodesInfoManager
 from .sockets.service_client import ServiceProxy
 from .sockets.publisher import Publisher
 from .sockets.service_manager import Empty, empty
@@ -112,7 +112,7 @@ def wait_for_service(
 
 def check_node_info(node_name: str) -> Optional[NodeInfo]:
     """Check the node information."""
-    LanComNode.get_instance().nodes_manager.nodes_info
+    return NodesInfoManager.get_instance().check_node_by_name(node_name)
 
 
 info = _logger.info
