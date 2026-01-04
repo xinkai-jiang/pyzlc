@@ -2,18 +2,42 @@
 from __future__ import annotations
 import asyncio
 import platform
-from typing import Callable, Any
+from typing import Callable, Any, Optional
 import time
 
 # from pyzlc.abstract_node import AbstractNode
 from .nodes.lancom_node import LanComNode
+from .nodes.nodes_info_manager import NodeInfo, LocalNodeInfo
+from .sockets.service_client import ServiceProxy
 from .sockets.publisher import Publisher
+from .sockets.service_manager import Empty, empty
 from .utils.log import _logger
 
 
 # Fix for Windows event loop to avoid ZMQ warnings
 if platform.system() == "Windows":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())  # type: ignore
+
+
+__all__ = [
+    "Publisher",
+    "init",
+    "sleep",
+    "spin",
+    "call",
+    "register_service_handler",
+    "register_subscriber_handler",
+    "wait_for_service",
+    "check_node_info",
+    "empty",
+    "Empty",
+    "info",
+    "debug",
+    "warning",
+    "error",
+    "remote_log",
+]
+
 
 
 def init(node_name: str, node_ip: str) -> None:
@@ -47,16 +71,16 @@ def call(
     request: Any,
 ) -> Any:
     """Call a service with the specified name and request."""
-    return LanComNode.get_instance().call(
-        service_name, request
-    )
+    ServiceProxy.request(service_name, request)
 
 def register_service_handler(
     service_name: str,
     callback: Callable,
 ) -> None:
     """Create a service with the specified name and callback."""
-    LanComNode.get_instance().register_service_handler(service_name, callback)
+    service_manager = LanComNode.get_instance().service_manager
+    LocalNodeInfo.get_instance().register_service(service_name, service_manager.port)
+    service_manager.register_service(service_name, callback)
 
 
 def register_subscriber_handler(
@@ -64,16 +88,32 @@ def register_subscriber_handler(
     callback: Callable,
 ) -> None:
     """Create a subscriber for the specified topic."""
-    LanComNode.get_instance().register_subscriber_handler(topic_name, callback)
-
+    subscriber_manager = LanComNode.get_instance().subscriber_manager
+    subscriber_manager.add_subscriber(topic_name, callback)
 
 def wait_for_service(
     service_name: str,
     timeout: float = 5.0,
     check_interval: float = 0.1,
 ) -> None:
-    """Wait for a service to become available."""
-    LanComNode.get_instance().wait_for_service(service_name, timeout, check_interval)
+    """Start the service manager's service loop."""
+    waited_time = 0
+    node_info_manager = LanComNode.get_instance().nodes_manager
+    while not node_info_manager.get_service_info(service_name):
+        if waited_time >= timeout:
+            raise TimeoutError(
+                f"Service {service_name} is online after {timeout} seconds."
+            )
+        _logger.info(
+            "Waiting for service %s to be registered locally...", service_name
+        )
+        time.sleep(check_interval)
+        waited_time += check_interval
+
+def check_node_info(node_name: str) -> Optional[NodeInfo]:
+    """Check the node information."""
+    LanComNode.get_instance().nodes_manager.nodes_info
+
 
 info = _logger.info
 debug = _logger.debug

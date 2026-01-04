@@ -36,6 +36,8 @@ def argument_func_wrapper(func: Callable) -> Callable:
 
     return wrapper
 
+Empty = type(None)
+empty = None
 
 class ServiceManager:
     """Manages services using a REP socket."""
@@ -66,7 +68,7 @@ class ServiceManager:
             raise TypeError(
                 f"Service '{service_name}' handler must have 0 or 1 parameter."
             )
-        _logger.info("Service '%s' registered.", service_name)
+        _logger.info(f"Service '{service_name}' registered successfully.")
 
     async def service_loop(
         self,
@@ -81,12 +83,12 @@ class ServiceManager:
                     continue
                 name_bytes, request = await service_socket.recv_multipart()
             except Exception as e:
-                _logger.error("Error occurred when receiving request: %s", e)
+                _logger.error(f"Error occurred when receiving request: {e}")
                 traceback.print_exc()
                 raise e
             service_name = name_bytes.decode()
             if service_name not in services.keys():
-                _logger.error("Service %s is not available", service_name)
+                _logger.error(f"Service {service_name} is not available")
                 continue
             try:
                 result = await asyncio.wait_for(
@@ -99,13 +101,11 @@ class ServiceManager:
                 _logger.error("Timeout: callback function took too long")
                 await service_socket.send_string("TIMEOUT")
             except msgpack.ExtraData as e:
-                _logger.error("Message unpacking error: %s", e)
+                _logger.error(f"Message unpacking error: {e}")
                 await service_socket.send_string("UNPACKING_ERROR")
             except Exception as e:
                 _logger.error(
-                    "One error occurred when processing the Service " "%s: %s",
-                    service_name,
-                    e,
+                    f"One error occurred when processing the Service {service_name}: {e}"
                 )
                 traceback.print_exc()
                 await service_socket.send_string("ERROR")

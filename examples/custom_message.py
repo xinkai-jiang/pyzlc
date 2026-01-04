@@ -1,12 +1,13 @@
-from typing import TypedDict
+from typing import TypedDict, List
 
 import pyzlc
+
 
 class CustomMessage(TypedDict):
     """A custom message structure."""
     count: int
     name: str
-    data: list[float]
+    data: List[float]
 
 
 def message_callback(msg: CustomMessage):

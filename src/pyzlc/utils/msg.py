@@ -2,7 +2,7 @@ import asyncio
 import socket
 import struct
 import uuid
-from typing import Optional, Union, Dict
+from typing import Optional, Union, Dict, Tuple
 
 import zmq
 import zmq.asyncio
@@ -29,7 +29,7 @@ def create_hash_identifier() -> HashIdentifier:
 
 def get_socket_addr(
     zmq_socket: Union[zmq.Socket, zmq.asyncio.Socket],
-) -> tuple[str, int]:
+) -> Tuple[str, int]:
     """Get the address and port of a ZMQ socket."""
     endpoint: bytes = zmq_socket.getsockopt(zmq.LAST_ENDPOINT)  # type: ignore
     return endpoint.decode(), int(endpoint.decode().split(":")[-1])
