@@ -1,30 +1,7 @@
-# Your original config, but with fixed mypy
 repos:
-  - repo: https://github.com/myint/autoflake
-    rev: "v2.1.0"
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.0
     hooks:
-      - id: autoflake
-        args: ["--remove-all-unused-imports", "--recursive", "--in-place", "--exclude=__init__.py"]
-  - repo: https://github.com/PyCQA/isort
-    rev: "5.12.0"
-    hooks:
-      - id: isort
-  - repo: https://github.com/psf/black
-    rev: "23.1.0"
-    hooks:
-      - id: black
-        args: ["--line-length=79"]
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.4.0
-    hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
-      - id: check-yaml
-  # Fixed mypy configuration
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: "v1.7.1"
-    hooks:
-      - id: mypy
-        additional_dependencies:
-          - types-setuptools
-        args: ["--ignore-missing-imports"]
+      - id: ruff
+        args: [ --fix ]
+      - id: ruff-format

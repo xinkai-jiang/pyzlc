@@ -170,3 +170,10 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# ruff
+.ruff_cache/
+
+# vscode
+.vscode/
+
+.benchmarks/

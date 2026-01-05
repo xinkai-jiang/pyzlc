@@ -4,8 +4,8 @@ import asyncio
 import platform
 from typing import Callable, Any, Optional
 import time
+import importlib.metadata
 
-# from pyzlc.abstract_node import AbstractNode
 from .nodes.lancom_node import LanComNode
 from .nodes.nodes_info_manager import NodeInfo, LocalNodeInfo, NodesInfoManager
 from .sockets.service_client import ServiceProxy
@@ -17,6 +17,13 @@ from .utils.log import _logger
 # Fix for Windows event loop to avoid ZMQ warnings
 if platform.system() == "Windows":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())  # type: ignore
+
+
+try:
+    __version__ = importlib.metadata.version("pyzlc")
+except importlib.metadata.PackageNotFoundError:
+    # package is not installed (e.g. running from source)
+    __version__ = "unknown"
 
 
 __all__ = [

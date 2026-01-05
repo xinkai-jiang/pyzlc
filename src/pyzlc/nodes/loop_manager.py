@@ -8,7 +8,7 @@ import traceback
 import threading
 from asyncio import AbstractEventLoop
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Coroutine, Optional, Callable, Union, TypeVar
+from typing import Any, Coroutine, Optional, Callable, TypeVar
 
 from ..utils.log import _logger
 

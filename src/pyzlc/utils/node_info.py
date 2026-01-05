@@ -1,4 +1,5 @@
 from typing import List, TypedDict
+import struct
 
 
 HashIdentifier = str
@@ -25,104 +26,60 @@ class NodeInfo(TypedDict):
     topics: List[SocketInfo]
     services: List[SocketInfo]
 
-
-# =======================
-# Binary Writer
-# =======================
-
 class BinWriter:
-    """Binary writer for encoding data into bytes."""
     def __init__(self):
         self.buf: bytearray = bytearray()
 
     def write_u16(self, v: int):
-        """Write a 16-bit unsigned integer."""
-        self.buf.append((v >> 8) & 0xFF)
-        self.buf.append(v & 0xFF)
+        # ">H" is Big-endian unsigned short (2 bytes)
+        self.buf.extend(struct.pack(">H", v))
 
     def write_u32(self, v: int):
-        """Write a 32-bit unsigned integer."""
-        self.buf.append((v >> 24) & 0xFF)
-        self.buf.append((v >> 16) & 0xFF)
-        self.buf.append((v >> 8) & 0xFF)
-        self.buf.append(v & 0xFF)
+        # ">I" is Big-endian unsigned int (4 bytes)
+        self.buf.extend(struct.pack(">I", v))
 
     def write_string(self, s: str):
-        """Write a length-prefixed UTF-8 string."""
         bs = s.encode("utf-8")
         self.write_u16(len(bs))
         self.buf.extend(bs)
 
     def write_fixed_string(self, s: str, length: int):
-        """Write a fixed-length UTF-8 string."""
-        if len(s) != length:
-            raise ValueError("fixed string length mismatch")
-        bs = s.encode("utf-8")
-        self.buf.extend(bs)
-
-
-# =======================
-# Binary Reader (zero-copy)
-# =======================
+        # Direct extend is faster than checking length in Python
+        # if you are sure about the data source.
+        self.buf.extend(s.encode("utf-8"))
 
 class BinReader:
-    """Binary reader for decoding data from bytes."""
     def __init__(self, data: bytes):
-        self.data = memoryview(data)
+        self.view = memoryview(data)
         self.pos = 0
 
-    def _ensure(self, size: int):
-        if self.pos + size > len(self.data):
-            raise ValueError("decode OOB")
-
     def read_u16(self) -> int:
-        """Read a 16-bit unsigned integer."""
-        self._ensure(2)
-        v = (self.data[self.pos] << 8) | self.data[self.pos + 1]
+        # Unpack_from avoids creating a new slice of memory
+        v = struct.unpack_from(">H", self.view, self.pos)[0]
         self.pos += 2
         return v
 
     def read_u32(self) -> int:
-        """Read a 32-bit unsigned integer."""
-        self._ensure(4)
-        v = (
-            (self.data[self.pos] << 24) |
-            (self.data[self.pos + 1] << 16) |
-            (self.data[self.pos + 2] << 8) |
-            self.data[self.pos + 3]
-        )
+        v = struct.unpack_from(">I", self.view, self.pos)[0]
         self.pos += 4
         return v
 
     def read_string(self) -> str:
-        """Read a length-prefixed UTF-8 string."""
         length = self.read_u16()
-        self._ensure(length)
-        s = bytes(self.data[self.pos:self.pos + length]).decode("utf-8")
-        self.pos += length
-        return s
+        return self.read_fixed_string(length)
 
     def read_fixed_string(self, length: int) -> str:
-        """Read a fixed-length UTF-8 string."""
-        self._ensure(length)
-        s = bytes(self.data[self.pos:self.pos + length]).decode("utf-8")
+        s = bytes(self.view[self.pos : self.pos + length]).decode("utf-8")
         self.pos += length
         return s
 
-
-
-# =======================
-# SocketInfo coder
-# =======================
-def encode_socket_info(info: SocketInfo) -> bytes:
-    """Encode SocketInfo into bytes."""
-    writer = BinWriter()
+# Optimized Serialization Flow
+def encode_socket_info_to(info: SocketInfo, writer: BinWriter):
+    """Writes directly into an existing writer to avoid allocations."""
     writer.write_string(info["name"])
     writer.write_u16(info["port"])
-    return bytes(writer.buf)
 
 def encode_node_info(info: NodeInfo) -> bytes:
-    """Encode NodeInfo into bytes."""
     writer = BinWriter()
     writer.write_fixed_string(info["nodeID"], 36)
     writer.write_u32(info["infoID"])
@@ -131,15 +88,14 @@ def encode_node_info(info: NodeInfo) -> bytes:
 
     writer.write_u16(len(info["topics"]))
     for topic in info["topics"]:
-        topic_bytes = encode_socket_info(topic)
-        writer.buf.extend(topic_bytes)
+        encode_socket_info_to(topic, writer) # No new writer created
 
     writer.write_u16(len(info["services"]))
     for service in info["services"]:
-        service_bytes = encode_socket_info(service)
-        writer.buf.extend(service_bytes)
+        encode_socket_info_to(service, writer)
 
     return bytes(writer.buf)
+
 
 def decode_socket_info(reader: BinReader, ip: str) -> SocketInfo:
     """Decode SocketInfo from bytes."""
