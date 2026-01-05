@@ -157,8 +157,8 @@ class LanComNode:
                 lambda: MulticastDiscoveryProtocol(self), sock=sock
             )
             await asyncio.Future()
-        except KeyboardInterrupt:
-            _logger.info("Discovery loop interrupted by user")
+        # except KeyboardInterrupt:
+        #     _logger.info("Discovery loop interrupted by user")
         except asyncio.CancelledError:
             _logger.info("Discovery loop cancelled...")
         except Exception as e:
@@ -179,6 +179,7 @@ class LanComNode:
 
     def stop_node(self):
         """Stop the node's operations."""
+        _logger.info("Stopping LanCom node...")
         self.running = False
         self.service_manager.stop()
         self.multicast_future.cancel()

@@ -2,7 +2,7 @@ import asyncio
 import socket
 import struct
 import uuid
-from typing import Optional, Union, Dict, Tuple, List, Final
+from typing import Optional, Union, Dict, Tuple, List, Final, TypedDict
 
 import zmq
 import zmq.asyncio
@@ -12,9 +12,9 @@ from .log import _logger
 
 Empty = type(None)
 empty = None
-MessageT = Union[Dict, str]
-RequestT = Union[Dict, str, Empty]
-ResponseT = Union[Dict, str, Empty]
+MessageT = Union[TypedDict, Dict, str]
+RequestT = Union[TypedDict, Dict, str, Empty]
+ResponseT = Union[TypedDict, Dict, str, Empty]
 
 
 class ResponseStatus:

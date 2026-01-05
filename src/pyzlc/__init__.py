@@ -67,6 +67,7 @@ def sleep(duration: float) -> None:
     except KeyboardInterrupt:
         _logger.debug("Sleep interrupted by user")
         LanComNode.get_instance().stop_node()
+        raise
 
 
 def spin() -> None:
