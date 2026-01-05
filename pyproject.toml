@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyzlc"
-version = "1.1.0"
+version = "1.1.1"
 description="A cross-environment tool to publish objects from simulation for Augmented Reality and Human Robot Interaction."
 dependencies = [
     "msgpack",
@@ -22,4 +22,4 @@ readme = "README.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["pyzlc"]
+include = ["pyzlc*"]
