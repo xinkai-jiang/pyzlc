@@ -67,6 +67,7 @@ def sleep(duration: float) -> None:
     except KeyboardInterrupt:
         _logger.debug("Sleep interrupted by user")
         LanComNode.get_instance().stop_node()
+        raise
 
 
 def spin() -> None:
@@ -83,9 +84,10 @@ def spin() -> None:
 def call(
     service_name: str,
     request: Any,
+    timeout: float = 2.0,
 ) -> Any:
     """Call a service with the specified name and request."""
-    ServiceProxy.request(service_name, request)
+    return ServiceProxy.request(service_name, request, timeout)
 
 
 def register_service_handler(

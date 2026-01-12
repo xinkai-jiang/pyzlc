@@ -68,6 +68,7 @@ class LanComLoopManager(abc.ABC):
             self._stopped_event.wait()
         except KeyboardInterrupt:
             self.stop()
+            raise KeyboardInterrupt
 
     def stop(self):
         """Stop the event loop and shut down the thread pool executor."""
@@ -83,6 +84,7 @@ class LanComLoopManager(abc.ABC):
             _logger.info("Event loop stop signal sent")
         except RuntimeError as e:
             _logger.error("One error occurred when stop loop manager: %s", e)
+            traceback.print_exc()
         self._stopped_event.wait()
         assert self._executor is not None
         self._executor.shutdown(wait=True)

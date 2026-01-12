@@ -16,6 +16,7 @@ class ServiceProxy:
     def request(
         service_name: str,
         request: RequestT,
+        timeout: float,
     ) -> Optional[ResponseT]:
         """Send a request to a service and get the response."""
         nodes_manager = NodesInfoManager.get_instance()
@@ -30,7 +31,7 @@ class ServiceProxy:
             _logger.error("Failed to pack request for service %s", service_name)
             return None
         response = loop_manager.submit_loop_task_and_wait(
-            send_bytes_request(addr, service_name, request_bytes),
+            send_bytes_request(addr, service_name, request_bytes, timeout),
         )
         if response is None:
             return None
@@ -41,4 +42,4 @@ class ServiceProxy:
                 response[0].decode(),
             )
             return None
-        return msgpack.unpackb(response[1]) if response else None
+        return msgpack.unpackb(response[1])
