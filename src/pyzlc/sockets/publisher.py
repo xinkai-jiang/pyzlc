@@ -23,7 +23,7 @@ class Publisher:
         local_node_info = LocalNodeInfo.get_instance()
         self._socket = ZMQSocketManager.get_instance().create_socket(zmq.PUB)
         self._socket.bind(f"tcp://{local_node_info.node_info['ip']}:0")
-        _, self.port = get_socket_addr(self._socket)
+        self.url, self.port = get_socket_addr(self._socket)
         local_node_info.register_publisher(self.name, self.port)
 
     def publish(self, msg: MessageT) -> None:
@@ -36,7 +36,7 @@ class Publisher:
         self._socket.close()
 
 
-class Streamer:
+class Streamer(Publisher):
     """Streams messages to a topic at a fixed rate."""
 
     def __init__(
@@ -46,9 +46,7 @@ class Streamer:
         fps: int,
         start_streaming: bool = False,
     ):
-        self.name = topic_name
-        self._socket = ZMQSocketManager.get_instance().create_async_socket(zmq.PUB)
-        self.loop_manager = LanComLoopManager.get_instance()
+        super().__init__(topic_name)
         self.running = False
         self.dt: float = 1 / fps
         self.update_func = update_func
@@ -70,7 +68,7 @@ class Streamer:
                 if diff < self.dt:
                     await async_sleep(self.dt - diff)
                 last = time.monotonic()
-                self._socket.send(msgpack.packb(self.update_func()))
+                self.publish(self.update_func())
             except Exception as e:
                 _logger.error("Error when streaming %s: %s", self.name, e)
                 traceback.print_exc()

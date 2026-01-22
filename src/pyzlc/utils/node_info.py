@@ -13,7 +13,6 @@ ServiceName = str
 
 class SocketInfo(TypedDict):
     """Socket information structure."""
-
     name: str
     ip: str
     port: int
@@ -21,7 +20,6 @@ class SocketInfo(TypedDict):
 
 class NodeInfo(TypedDict):
     """Node information structure."""
-
     nodeID: str
     infoID: int
     name: str

@@ -19,20 +19,31 @@ class ServiceProxy:
         timeout: float,
     ) -> Optional[ResponseT]:
         """Send a request to a service and get the response."""
+        return LanComLoopManager.get_instance().submit_loop_task_and_wait(
+            ServiceProxy.request_async(service_name, request, timeout)
+        )
+
+    @staticmethod
+    async def request_async(
+        service_name: str,
+        request: RequestT,
+        timeout: float,
+    ) -> Optional[ResponseT]:
+        """Send an asynchronous request to a service and get the response."""
         nodes_manager = NodesInfoManager.get_instance()
-        loop_manager = LanComLoopManager.get_instance()
         service_info = nodes_manager.get_service_info(service_name)
         if service_info is None:
             _logger.warning("Service %s is not exist", service_name)
             return None
         addr = f"tcp://{service_info['ip']}:{service_info['port']}"
-        request_bytes = msgpack.packb(request)
+        if isinstance(request, bytes):
+            request_bytes = request
+        else:
+            request_bytes = msgpack.packb(request, use_bin_type=True)
         if request_bytes is None:
             _logger.error("Failed to pack request for service %s", service_name)
             return None
-        response = loop_manager.submit_loop_task_and_wait(
-            send_bytes_request(addr, service_name, request_bytes, timeout),
-        )
+        response = await send_bytes_request(addr, service_name, request_bytes, timeout)
         if response is None:
             return None
         if response[0].decode() != ResponseStatus.SUCCESS:

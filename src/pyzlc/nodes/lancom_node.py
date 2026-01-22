@@ -14,6 +14,7 @@ from .zmq_socket_manager import ZMQSocketManager
 from ..sockets.service_manager import ServiceManager
 from ..utils.node_info import decode_node_info
 from ..sockets.subscriber_manager import SubscriberManager
+from ..utils.msg import is_in_same_subnet
 
 
 # NOTE: asyncio.loop.sock_recvfrom can only be used after Python 3.11
@@ -23,6 +24,7 @@ class MulticastDiscoveryProtocol(asyncio.DatagramProtocol):
 
     def __init__(self, node_manager: LanComNode):
         self.loop_manager = node_manager.loop_manager
+        self.local_ip = node_manager.node_ip
         self.node_info_manager = node_manager.nodes_manager
         self.transport: Optional[asyncio.DatagramTransport] = None
 
@@ -34,6 +36,8 @@ class MulticastDiscoveryProtocol(asyncio.DatagramProtocol):
         """Handle incoming multicast discovery messages"""
         try:
             node_ip = addr[0]
+            if not is_in_same_subnet(self.local_ip, node_ip):
+                return
             node_info = decode_node_info(data)
             node_info["ip"] = node_ip
             self.node_info_manager.update_node(node_info)
