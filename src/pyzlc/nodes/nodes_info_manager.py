@@ -57,6 +57,11 @@ class NodesInfoManager:
         if not self.check_info(node_info["nodeID"], node_info["infoID"]):
             self.nodes_info[node_id] = node_info
             self.nodes_info_id[node_id] = node_info["infoID"]
+        # in case the node bind to all the interface
+        for service in node_info["services"]:
+            service["ip"] = node_info["ip"]
+        for topic in node_info["topics"]:
+            topic["ip"] = node_info["ip"]
         self.nodes_heartbeat[node_id] = time.monotonic()
 
     def remove_node(self, node_id: HashIdentifier) -> None:

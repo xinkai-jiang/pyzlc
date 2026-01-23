@@ -55,11 +55,16 @@ __all__: List[str] = [
 ]
 
 
-def init(node_name: str, node_ip: str) -> None:
+def init(
+    node_name: str,
+    node_ip: str,
+    group: str = "224.0.0.1",
+    group_port: int = 7720,
+) -> None:
     """Initialize the LanCom node singleton."""
     if LanComNode.instance is not None:
         raise ValueError("Node is already initialized.")
-    LanComNode.init(node_name, node_ip)
+    LanComNode.init(node_name, node_ip, group, group_port)
 
 
 def get_node() -> LanComNode:
