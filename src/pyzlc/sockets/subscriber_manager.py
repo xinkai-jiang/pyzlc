@@ -1,6 +1,7 @@
 import traceback
-from typing import Callable, List
+from typing import Callable, List, Any, Optional
 import asyncio
+from concurrent.futures import Future
 import zmq
 import msgpack
 
@@ -16,7 +17,7 @@ class Subscriber:
     def __init__(
         self,
         topic_name: str,
-        callback: Callable,
+        callback: Callable[[Any], None],
     ):
         self.nodes_manager = NodesInfoManager.get_instance()
         self.loop_manager = LanComLoopManager.get_instance()
@@ -27,7 +28,9 @@ class Subscriber:
         self.running: bool = True
         self.connected: bool = False
         self.published_urls: List[str] = []
-        self.loop_manager.submit_loop_task(self.listen_loop())
+        self._listen_future: Optional[Future] = None
+        self._receive_future: Optional[Future] = None
+        self._listen_future = self.loop_manager.submit_loop_task(self.listen_loop())
 
     def connect(self, url: str) -> None:
         """Connect to a publisher's socket."""
@@ -36,7 +39,7 @@ class Subscriber:
         self.published_urls.append(url)
         _logger.info("Subscriber %s is connected to %s", self.name, url)
         if len(self.published_urls) == 1:
-            self.loop_manager.submit_loop_task(self.receive_loop())
+            self._receive_future = self.loop_manager.submit_loop_task(self.receive_loop())
 
     async def listen_loop(self) -> None:
         """Listens for new publishers and connects to them."""
@@ -78,6 +81,10 @@ class Subscriber:
     def close(self) -> None:
         """Close the subscriber socket."""
         self.running = False
+        if self._listen_future is not None:
+            self._listen_future.cancel()
+        if self._receive_future is not None:
+            self._receive_future.cancel()
         self._socket.close()
         _logger.info("Subscriber %s has been closed", self.name)
 
@@ -89,7 +96,7 @@ class SubscriberManager:
         self.subscribers: List[Subscriber] = []
         self.loop_manager = LanComLoopManager.get_instance()
 
-    def add_subscriber(self, topic_name: str, callback: Callable) -> None:
+    def add_subscriber(self, topic_name: str, callback: Callable[[Any], None]) -> None:
         """Add a new subscriber and start its listening and receiving loops."""
         subscriber = Subscriber(topic_name, callback)
         self.subscribers.append(subscriber)

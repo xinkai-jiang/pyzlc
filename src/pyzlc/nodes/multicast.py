@@ -8,11 +8,7 @@ from typing import Tuple, Optional
 from ..nodes.nodes_info_manager import NodesInfoManager
 from ..utils.log import _logger
 from ..utils.msg import _parse_version, is_in_same_subnet, HeartbeatMessage, decode_heartbeat_message
-from ..utils.event import Event
 from ..utils.node_info import NodeInfo
-
-
-
 
 
 class MulticastWorker:
@@ -32,7 +28,6 @@ class MulticastWorker:
         self.group_port = group_port
         self.group_name = group_name
         self.protocol_version: Tuple[int, int, int] = _parse_version()
-        self.node_info_event = Event(HeartbeatMessage)
 
     async def start(self):
         """Start the multicast worker."""

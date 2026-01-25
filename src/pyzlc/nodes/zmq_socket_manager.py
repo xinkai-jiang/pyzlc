@@ -21,6 +21,7 @@ class ZMQSocketManager:
         return cls._instance
 
     def __init__(self) -> None:
+        ZMQSocketManager._instance = self
         self.context: zmq.Context = zmq.Context()
         self.async_context: zmq.asyncio.Context = zmq.asyncio.Context.instance()
 
@@ -31,3 +32,8 @@ class ZMQSocketManager:
     def create_async_socket(self, socket_type: int) -> zmq.asyncio.Socket:
         """Create and return a new asynchronous ZMQ socket of the specified type."""
         return self.async_context.socket(socket_type)
+
+    def shutdown(self) -> None:
+        """Shutdown all ZMQ contexts and cleanup resources."""
+        self.context.term()
+        self.async_context.term()
