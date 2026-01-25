@@ -59,11 +59,17 @@ class Subscriber:
         _logger.info("Subscriber %s is subscribing ...", self.name)
         while self.running:
             try:
-                events = await self._socket.poll()
-                if not events:
-                    continue
+                # events = await self._socket.poll()
+                # if not events:
+                #     continue
                 msg = await self._socket.recv()
                 self.callback(msgpack.unpackb(msg))
+            # except asyncio.CancelledError:
+            #     _logger.info("Receive loop for subscriber %s cancelled...", self.name)
+            #     break
+            # except KeyboardInterrupt:
+            #     _logger.info("Receive loop for subscriber %s interrupted by user...", self.name)
+            #     break
             except Exception as e:
                 _logger.error("Error from topic %s subscriber: %s", self.name, e)
                 traceback.print_exc()

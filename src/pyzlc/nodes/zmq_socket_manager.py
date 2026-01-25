@@ -22,7 +22,7 @@ class ZMQSocketManager:
 
     def __init__(self) -> None:
         self.context: zmq.Context = zmq.Context()
-        self.async_context: zmq.asyncio.Context = zmq.asyncio.Context()
+        self.async_context: zmq.asyncio.Context = zmq.asyncio.Context.instance()
 
     def create_socket(self, socket_type: int) -> zmq.Socket:
         """Create and return a new ZMQ socket of the specified type."""

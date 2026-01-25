@@ -9,8 +9,8 @@ import msgpack
 
 from ..nodes.zmq_socket_manager import ZMQSocketManager
 from ..utils.log import _logger
-from ..nodes.nodes_info_manager import LocalNodeInfo
 from ..nodes.loop_manager import LanComLoopManager
+from ..nodes.nodes_info_manager import NodesInfoManager
 from ..utils.msg import MessageT, get_socket_addr
 
 
@@ -20,11 +20,11 @@ class Publisher:
     def __init__(self, topic_name: str):
         self.name = topic_name
         self.loop_manager = LanComLoopManager.get_instance()
-        local_node_info = LocalNodeInfo.get_instance()
+        local_node_info = NodesInfoManager.get_instance().local_node_info
         self._socket = ZMQSocketManager.get_instance().create_socket(zmq.PUB)
-        self._socket.bind(f"tcp://{local_node_info.node_info['ip']}:0")
+        self._socket.bind(f"tcp://{local_node_info['ip']}:0")
         self.url, self.port = get_socket_addr(self._socket)
-        local_node_info.register_publisher(self.name, self.port)
+        NodesInfoManager.get_instance().register_local_publisher(self.name, self.port)
 
     def publish(self, msg: MessageT) -> None:
         """Publish a message in bytes."""

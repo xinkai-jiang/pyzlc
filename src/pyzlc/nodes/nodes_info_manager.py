@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import time
 
 from ..utils.node_info import (
@@ -10,9 +10,10 @@ from ..utils.node_info import (
     TopicName,
     HashIdentifier,
 )
-from ..utils.msg import create_hash_identifier
+from .loop_manager import LanComLoopManager
+from ..utils.msg import create_hash_identifier, HeartbeatMessage
 from ..utils.log import _logger
-from ..utils.node_info import encode_node_info
+from ..utils.msg import send_request
 
 
 class NodesInfoManager:
@@ -27,12 +28,69 @@ class NodesInfoManager:
             raise ValueError("NodesInfoManager is not initialized yet.")
         return cls._instance
 
-    def __init__(self):
+    def __init__(self, local_name: str, local_ip: str) -> None:
         NodesInfoManager._instance = self
+        self.loop_manager = LanComLoopManager.get_instance()
         self.running = True
-        self.nodes_info: Dict[HashIdentifier, NodeInfo] = {}
-        self.nodes_info_id: Dict[HashIdentifier, int] = {}
-        self.nodes_heartbeat: Dict[HashIdentifier, float] = {}
+        self.nodes_info: Dict[HashIdentifier, NodeInfo] = {}  # keyed by full nodeID
+        self.nodes_info_id: Dict[HashIdentifier, int] = {}  # keyed by full nodeID
+        self.nodes_heartbeat: Dict[HashIdentifier, float] = {}  # keyed by full nodeID
+        # Map int32 node_hash to full nodeID for lookup
+        self._hash_to_node_id: Dict[int, HashIdentifier] = {}
+        # self.local_name = local_name
+        # self.local_ip = local_ip
+        # self.local_node_id = create_hash_identifier()
+        # self.local_info_id: int = 0
+        self.local_node_info: NodeInfo = NodeInfo(
+            {
+                "name": local_name,
+                "nodeID": create_hash_identifier(),
+                "infoID": 0,
+                "ip": local_ip,
+                "topics": [],
+                "services": [],
+            }
+        )
+
+    def check_local_service(self, service_name: str) -> bool:
+        """Check if a service is registered locally."""
+        for service in self.local_node_info.get("services", []):
+            if service["name"] == service_name:
+                return True
+        return False
+
+    def check_local_topic(self, topic_name: str) -> bool:
+        """Check if a topic is registered locally."""
+        for topic in self.local_node_info.get("topics", []):
+            if topic["name"] == topic_name:
+                return True
+        return False
+
+    def register_local_service(self, service_name: str, port: int) -> None:
+        """Register a new service locally."""
+        if self.check_local_service(service_name):
+            raise ValueError(f"Service {service_name} is already registered locally.")
+        if self.get_service_info(service_name):
+            raise ValueError(
+                f"Service {service_name} is already registered in the network."
+            )
+        self.local_node_info["services"].append(
+            {"name": service_name, "ip": self.local_node_info.get("ip"), "port": port}
+        )
+        self.local_node_info["infoID"] += 1
+
+    def register_local_publisher(self, topic_name: str, port: int) -> None:
+        """Register a new topic locally."""
+        if self.check_local_topic(topic_name):
+            raise ValueError(f"Topic {topic_name} is already registered locally.")
+        if len(self.get_publisher_info(topic_name)) > 0:
+            raise ValueError(
+                f"Topic {topic_name} is already registered in the network."
+            )
+        self.local_node_info["topics"].append(
+            {"name": topic_name, "ip": self.local_node_info.get("ip"), "port": port}
+        )
+        self.local_node_info["infoID"] += 1
 
     def check_node_by_name(self, node_name: str) -> Optional[NodeInfo]:
         """Check if a node with the given name exists."""
@@ -47,10 +105,14 @@ class NodesInfoManager:
 
     def check_info(self, node_id: HashIdentifier, info_id: int) -> bool:
         """Check if the info ID for a given node matches the provided info ID."""
-        return self.nodes_info_id.get(node_id, "") == info_id
+        return self.nodes_info_id.get(node_id, -1) == info_id
 
     def update_node(self, node_info: NodeInfo):
-        """Update or add a node's information."""
+        """Update or add a node's information.
+
+        Note: This method is kept for backwards compatibility.
+        New code should use handle_heartbeat() instead.
+        """
         if not self.check_node(node_info["nodeID"]):
             _logger.info("Node %s has been updated", node_info["name"])
         node_id = node_info["nodeID"]
@@ -77,6 +139,9 @@ class NodesInfoManager:
             for pub in pub_info["topics"]:
                 if pub["name"] == topic_name:
                     publishers.append(pub)
+        for pub in self.local_node_info["topics"]:
+            if pub["name"] == topic_name:
+                publishers.append(pub)
         return publishers
 
     def get_service_info(self, service_name: str) -> Optional[SocketInfo]:
@@ -85,9 +150,45 @@ class NodesInfoManager:
             for service in node_info["services"]:
                 if service["name"] == service_name:
                     return service
+        for service in self.local_node_info["services"]:
+            if service["name"] == service_name:
+                return service
         return None
 
-    async def check_heartbeat(self) -> None:
+    def handle_heartbeat(
+        self, heartbeat_message: HeartbeatMessage, node_ip: str
+    ) -> None:
+        self.nodes_heartbeat[heartbeat_message.node_id] = time.monotonic()
+        if self.check_info(heartbeat_message.node_id, heartbeat_message.info_id):
+            return
+        node_info = self.loop_manager.submit_loop_task_and_wait(
+            self._fetch_node_info(node_ip, heartbeat_message.service_port)
+        )
+        if node_info is not None:
+            self.update_node(node_info)
+
+    async def _fetch_node_info(self, node_ip: str, service_port: int) -> Any:
+        """Fetch full node information from a remote node.
+
+        Args:
+            node_ip: IP address of the remote node
+            service_port: Service port of the remote node
+        Returns:
+            Full NodeInfo from the remote node, or None on failure
+        """
+        # Placeholder for actual implementation to fetch node info
+        # This could involve making a network request to the remote node
+        # and retrieving its NodeInfo data.
+        _logger.info(f"Fetching node info from {node_ip}:{service_port}")
+        result = await send_request(
+            addr=f"tcp://{node_ip}:{service_port}",
+            service_name="get_node_info",
+            request=None,
+            timeout=0.3,
+        )
+        return result
+
+    async def check_heartbeat(self, interval: float = 1.0) -> None:
         """Periodically check the heartbeat of nodes."""
         while self.running:
             removed_nodes = []
@@ -100,78 +201,4 @@ class NodesInfoManager:
                     removed_nodes.append(node_id)
             for node_id in removed_nodes:
                 self.remove_node(node_id)
-            await asyncio.sleep(1)
-
-
-class LocalNodeInfo:
-    """Holds local node information."""
-
-    _instance: Optional[LocalNodeInfo] = None
-
-    @classmethod
-    def get_instance(cls) -> LocalNodeInfo:
-        """Get the singleton instance of LocalNodeInfo."""
-        if cls._instance is None:
-            raise ValueError("LocalNodeInfo is not initialized yet.")
-        return cls._instance
-
-    def __init__(self, name: str, ip: str) -> None:
-        LocalNodeInfo._instance = self
-        self.nodes_manager: NodesInfoManager = NodesInfoManager.get_instance()
-        self.name = name
-        self.node_id = create_hash_identifier()
-        self.info_id: int = 0
-        self.node_info: NodeInfo = NodeInfo(
-            {
-                "name": self.name,
-                "nodeID": self.node_id,
-                "infoID": self.info_id,
-                "ip": ip,
-                "topics": [],
-                "services": [],
-            }
-        )
-
-    def create_heartbeat_message(self) -> bytes:
-        """Create a heartbeat message in bytes."""
-        return encode_node_info(self.node_info)
-
-    def check_local_service(self, service_name: str) -> bool:
-        """Check if a service is registered locally."""
-        for service in self.node_info.get("services", []):
-            if service["name"] == service_name:
-                return True
-        return False
-
-    def check_local_topic(self, topic_name: str) -> bool:
-        """Check if a topic is registered locally."""
-        for topic in self.node_info.get("topics", []):
-            if topic["name"] == topic_name:
-                return True
-        return False
-
-    def register_service(self, service_name: str, port: int) -> None:
-        """Register a new service locally."""
-        if self.check_local_service(service_name):
-            raise ValueError(f"Service {service_name} is already registered locally.")
-        if self.nodes_manager.get_service_info(service_name):
-            raise ValueError(
-                f"Service {service_name} is already registered in the network."
-            )
-        self.node_info.setdefault("services", []).append(
-            {"name": service_name, "ip": self.node_info.get("ip"), "port": port}
-        )
-        self.info_id += 1
-
-    def register_publisher(self, topic_name: str, port: int) -> None:
-        """Register a new topic locally."""
-        if self.check_local_topic(topic_name):
-            raise ValueError(f"Topic {topic_name} is already registered locally.")
-        if len(self.nodes_manager.get_publisher_info(topic_name)) > 0:
-            raise ValueError(
-                f"Topic {topic_name} is already registered in the network."
-            )
-        self.node_info.setdefault("topics", []).append(
-            {"name": topic_name, "ip": self.node_info.get("ip"), "port": port}
-        )
-        self.info_id += 1
+            await asyncio.sleep(interval)

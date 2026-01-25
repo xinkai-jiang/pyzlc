@@ -9,15 +9,14 @@ import asyncio
 import platform
 from typing import Callable, Any, Optional, List, Coroutine
 import time
-import importlib.metadata
 import concurrent.futures
 
 from .nodes.lancom_node import LanComNode
-from .nodes.nodes_info_manager import NodeInfo, LocalNodeInfo, NodesInfoManager
+from .nodes.nodes_info_manager import NodeInfo, NodesInfoManager
 from .nodes.loop_manager import LanComLoopManager, TaskReturnT
-from .sockets.service_client import ServiceProxy
+from .sockets.service_client import zlc_request_async, zlc_request
 from .sockets.publisher import Publisher
-from .utils.msg import Empty, empty
+from .utils.msg import Empty, empty, _get_zlc_version
 from .utils.log import _logger
 
 
@@ -25,13 +24,7 @@ from .utils.log import _logger
 if platform.system() == "Windows":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())  # type: ignore
 
-
-try:
-    __version__ = importlib.metadata.version("pyzlc")
-except importlib.metadata.PackageNotFoundError:
-    # package is not installed (e.g. running from source)
-    __version__ = "unknown"
-
+__version__ = _get_zlc_version()
 __author__ = "Xinkai Jiang"
 __email__ = "jiangxinkai98@gmail.com"
 
@@ -60,11 +53,16 @@ def init(
     node_ip: str,
     group: str = "224.0.0.1",
     group_port: int = 7720,
+    group_name: str = "zlc"
 ) -> None:
     """Initialize the LanCom node singleton."""
     if LanComNode.instance is not None:
         raise ValueError("Node is already initialized.")
-    LanComNode.init(node_name, node_ip, group, group_port)
+    LanComNode.init(node_name, node_ip, group, group_port, group_name)
+    register_service_handler(
+        "get_node_info", LanComNode.get_instance()._get_node_info_handler
+    )
+    LanComNode.get_instance().start_node()
 
 
 def get_node() -> LanComNode:
@@ -105,7 +103,7 @@ def call(
     timeout: float = 2.0,
 ) -> Any:
     """Call a service with the specified name and request."""
-    return ServiceProxy.request(service_name, request, timeout)
+    return zlc_request(service_name, request, timeout)
 
 
 async def async_call(
@@ -114,7 +112,7 @@ async def async_call(
     timeout: float = 2.0,
 ) -> Any:
     """Asynchronously call a service with the specified name and request."""
-    return await ServiceProxy.request_async(service_name, request, timeout)
+    return await zlc_request_async(service_name, request, timeout)
 
 
 def register_service_handler(
@@ -123,7 +121,9 @@ def register_service_handler(
 ) -> None:
     """Create a service with the specified name and callback."""
     service_manager = LanComNode.get_instance().service_manager
-    LocalNodeInfo.get_instance().register_service(service_name, service_manager.port)
+    NodesInfoManager.get_instance().register_local_service(
+        service_name, service_manager.port
+    )
     service_manager.register_service(service_name, callback)
 
 

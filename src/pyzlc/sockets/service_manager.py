@@ -19,7 +19,7 @@ class ServiceManager:
 
     def __init__(self, url: str) -> None:
         """Initialize the ServiceManager with a REP socket."""
-        self.res_socket: AsyncSocket = zmq.asyncio.Context().socket(zmq.REP)
+        self.res_socket: AsyncSocket = zmq.asyncio.Context.instance().socket(zmq.REP)
         self.callable_services: Dict[str, ServiceCallback] = {}
         self.res_socket.bind(url)
         url, self.port = get_socket_addr(self.res_socket)
@@ -54,7 +54,7 @@ class ServiceManager:
 
     async def service_loop(
         self,
-        _socket: zmq.asyncio.Socket,
+        _socket: AsyncSocket,
         services: dict[str, ServiceCallback],
     ) -> None:
         """Asynchronously handles incoming service requests."""
@@ -69,36 +69,35 @@ class ServiceManager:
                 traceback.print_exc()
                 raise e
             service_name = name_bytes.decode()
+            _logger.debug(f"Received request for service: {service_name}")
             if service_name not in services.keys():
                 _logger.error(f"Service {service_name} is not available")
                 continue
+            response_status: bytes = ResponseStatus.SUCCESS.encode()
+            packed_result: Optional[bytes] = None
             try:
                 packed_result = await asyncio.wait_for(
                     self.loop_manager.run_in_executor(services[service_name], request),
                     timeout=2.0,
                 )
-                # packed_result = msgpack.packb(result, use_bin_type=True)
-                await _socket.send_multipart(
-                    [ResponseStatus.SUCCESS.encode(), packed_result]
-                )
             except asyncio.TimeoutError:
                 _logger.error("Timeout: callback function took too long")
-                await _socket.send_multipart(
-                    [ResponseStatus.SERVICE_TIMEOUT.encode(), ""]
-                )
+                response_status = ResponseStatus.SERVICE_TIMEOUT.encode()
             except msgpack.ExtraData as e:
                 _logger.error(f"Message unpacking error: {e}")
-                await _socket.send_multipart(
-                    [ResponseStatus.INVALID_RESPONSE.encode(), ""]
-                )
+                response_status = ResponseStatus.INVALID_REQUEST.encode()
             except Exception as e:
                 _logger.error(
                     f"One error occurred when processing the Service {service_name}: {e}"
                 )
+                response_status = ResponseStatus.UNKNOWN_ERROR.encode()
                 traceback.print_exc()
-                await _socket.send_multipart(
-                    [ResponseStatus.UNKNOWN_ERROR.encode(), ""]
-                )
+                raise e
+            try:
+                await _socket.send_multipart([response_status, packed_result or b""])
+            except Exception as e:
+                _logger.error(f"Error occurred when sending response: {e}")
+                traceback.print_exc()
                 raise e
         _logger.info("Service loop has been stopped")
 
