@@ -32,6 +32,7 @@ __all__: List[str] = [
     "Publisher",
     "Streamer",
     "init",
+    "shutdown",
     "sleep",
     "spin",
     "call",
@@ -60,7 +61,7 @@ def init(
     node_ip: str,
     group: str = "224.0.0.1",
     group_port: int = 7720,
-    group_name: str = "zlc"
+    group_name: str = "zlc_default_group_name",
 ) -> None:
     """Initialize the LanCom node singleton."""
     if LanComNode.instance is not None:
@@ -71,6 +72,10 @@ def init(
     )
     LanComNode.get_instance().start_node()
 
+def shutdown() -> None:
+    """Shutdown the LanCom node."""
+    node = LanComNode.get_instance()
+    node.stop_node()
 
 def get_node() -> LanComNode:
     """Get the LanCom node singleton."""

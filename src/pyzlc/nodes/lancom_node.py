@@ -30,9 +30,9 @@ class LanComNode:
         cls,
         node_name: str,
         node_ip: str,
-        group: str = "224.0.0.1",
-        group_port: int = 7720,
-        group_name: str = "zlc",
+        group: str,
+        group_port: int,
+        group_name: str,
     ) -> None:
         if cls.instance is None:
             cls.instance = LanComNode(node_name, node_ip, group, group_port, group_name)
@@ -43,7 +43,7 @@ class LanComNode:
         node_ip: str,
         group: str,
         group_port: int,
-        group_name: str = "zlc",
+        group_name: str,
     ) -> None:
         LanComNode.instance = self
         self.name = node_name

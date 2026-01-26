@@ -69,7 +69,7 @@ class ServiceManager:
                 traceback.print_exc()
                 raise e
             service_name = name_bytes.decode()
-            _logger.debug(f"Received request for service: {service_name}")
+            # _logger.debug(f"Received request for service: {service_name}")
             if service_name not in services.keys():
                 _logger.error(f"Service {service_name} is not available")
                 continue

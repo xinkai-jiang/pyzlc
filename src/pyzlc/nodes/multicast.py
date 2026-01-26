@@ -143,6 +143,7 @@ class MulticastDiscoveryProtocol(asyncio.DatagramProtocol):
             heartbeat_message = decode_heartbeat_message(data)
             # Filter by group name
             if heartbeat_message.group_name != self.group_name:
+                # _logger.debug("Ignoring heartbeat with different group name: %s", heartbeat_message.group_name)
                 return
             # Ignore own heartbeat (compare int32 hashes)
             if heartbeat_message.node_id == self.local_node_id:

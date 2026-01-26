@@ -128,6 +128,8 @@ class NodesInfoManager:
 
     def remove_node(self, node_id: HashIdentifier) -> None:
         """Remove a node's information."""
+        if self.check_node(node_id):
+            _logger.info("Node %s has been removed", self.nodes_info[node_id]["name"])
         self.nodes_info.pop(node_id)
         self.nodes_info_id.pop(node_id)
         self.nodes_heartbeat.pop(node_id)
@@ -190,15 +192,18 @@ class NodesInfoManager:
 
     async def check_heartbeat(self, interval: float = 1.0) -> None:
         """Periodically check the heartbeat of nodes."""
-        while self.running:
-            removed_nodes = []
-            for node_id, last_heartbeat in self.nodes_heartbeat.items():
-                if time.monotonic() - last_heartbeat > 3:
-                    _logger.warning(
-                        "Node %s is considered offline",
-                        self.nodes_info[node_id]["name"],
-                    )
-                    removed_nodes.append(node_id)
-            for node_id in removed_nodes:
-                self.remove_node(node_id)
-            await asyncio.sleep(interval)
+        try:
+            while self.running:
+                removed_nodes = []
+                for node_id, last_heartbeat in self.nodes_heartbeat.items():
+                    if time.monotonic() - last_heartbeat > 3:
+                        _logger.warning(
+                            "Node %s is considered offline",
+                            self.nodes_info[node_id]["name"],
+                        )
+                        removed_nodes.append(node_id)
+                for node_id in removed_nodes:
+                    self.remove_node(node_id)
+                await asyncio.sleep(interval)
+        except asyncio.CancelledError:
+            pass
