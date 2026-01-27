@@ -167,6 +167,7 @@ class NodesInfoManager:
             self._fetch_node_info(node_ip, heartbeat_message.service_port)
         )
         if node_info is not None:
+            node_info["ip"] = node_ip
             self.update_node(node_info)
 
     async def _fetch_node_info(self, node_ip: str, service_port: int) -> Any:

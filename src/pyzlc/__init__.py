@@ -197,6 +197,12 @@ def submit_loop_task(
     assert LanComLoopManager is not None, "LanComNode is not initialized."
     return LanComLoopManager.get_instance().submit_loop_task(task)
 
+def submit_thread_pool_task(
+    func: Callable[..., TaskReturnT], *args: Any
+) -> concurrent.futures.Future:
+    """Submit a synchronous function to the thread pool executor."""
+    assert LanComLoopManager is not None, "LanComNode is not initialized."
+    return LanComLoopManager.get_instance().submit_thread_pool_task(func, *args)
 
 info = _logger.info
 debug = _logger.debug

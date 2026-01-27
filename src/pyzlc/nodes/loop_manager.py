@@ -158,3 +158,19 @@ class LanComLoopManager(abc.ABC):
             raise RuntimeError("The event loop is not running")
         future = asyncio.run_coroutine_threadsafe(task, self._loop)
         return future.result()
+
+    def submit_thread_pool_task(
+        self, func: Callable[..., TaskReturnT], *args: Any
+    ) -> concurrent.futures.Future:
+        """Submit a synchronous function to the thread pool executor.
+
+        Args:
+            func: The callable to run.
+            *args: Positional arguments for the function.
+
+        Returns:
+            concurrent.futures.Future: A future representing the execution of the function.
+        """
+        if self._executor is None:
+            raise RuntimeError("Thread pool executor is not initialized")
+        return self._executor.submit(func, *args)

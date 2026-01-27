@@ -111,7 +111,7 @@ class HeartbeatMessage:
         return bytes(msg)
 
 
-def decode_heartbeat_message(data: bytes) -> HeartbeatMessage:
+def decode_heartbeat_message(data: bytes) -> Optional[HeartbeatMessage]:
     """Decode the binary heartbeat message.
 
     Structure:
@@ -121,20 +121,24 @@ def decode_heartbeat_message(data: bytes) -> HeartbeatMessage:
         - service_port: int32 (4 bytes)
         - group_name: remaining bytes
     """
-    if len(data) < 56:
-        raise ValueError(
-            f"Message too short: expected at least 56 bytes, got {len(data)}"
-        )
-    unpacked_data = struct.unpack("!3i36s2i", data[:56])
-    major, minor, patch = unpacked_data[0:3]
-    node_id = unpacked_data[3].decode("utf-8").strip("\x00")
-    info_id = unpacked_data[4]
-    service_port = unpacked_data[5]
-    group_name = data[56:].decode("utf-8")
+    try:
+        if len(data) < 56:
+            raise ValueError(
+                f"Message too short: expected at least 56 bytes, got {len(data)}"
+            )
+        unpacked_data = struct.unpack("!3i36s2i", data[:56])
+        major, minor, patch = unpacked_data[0:3]
+        node_id = unpacked_data[3].decode("utf-8").strip("\x00")
+        info_id = unpacked_data[4]
+        service_port = unpacked_data[5]
+        group_name = data[56:].decode("utf-8")
 
-    return HeartbeatMessage(
-        (major, minor, patch), node_id, info_id, service_port, group_name
-    )
+        return HeartbeatMessage(
+            (major, minor, patch), node_id, info_id, service_port, group_name
+        )
+    except Exception as e:
+        # _logger.error(f"Failed to decode heartbeat message: {e}")
+        return None
 
 
 def is_in_same_subnet(ip1: str, ip2: str, subnet_mask: str = "255.255.255.0") -> bool:

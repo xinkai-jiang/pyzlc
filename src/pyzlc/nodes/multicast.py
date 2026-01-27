@@ -142,7 +142,7 @@ class MulticastDiscoveryProtocol(asyncio.DatagramProtocol):
             # Decode the lightweight heartbeat message
             heartbeat_message = decode_heartbeat_message(data)
             # Filter by group name
-            if heartbeat_message.group_name != self.group_name:
+            if heartbeat_message is None or heartbeat_message.group_name != self.group_name:
                 # _logger.debug("Ignoring heartbeat with different group name: %s", heartbeat_message.group_name)
                 return
             # Ignore own heartbeat (compare int32 hashes)
