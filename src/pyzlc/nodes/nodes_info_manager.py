@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, cast
 import time
 
 from ..utils.node_info import (
@@ -157,39 +157,29 @@ class NodesInfoManager:
                 return service
         return None
 
-    def handle_heartbeat(
+    async def handle_heartbeat_async(
         self, heartbeat_message: HeartbeatMessage, node_ip: str
     ) -> None:
+        """Handle a heartbeat message asynchronously.
+
+        Args:
+            heartbeat_message: The decoded heartbeat message
+            node_ip: IP address of the remote node
+        """
         self.nodes_heartbeat[heartbeat_message.node_id] = time.monotonic()
         if self.check_info(heartbeat_message.node_id, heartbeat_message.info_id):
             return
-        node_info = self.loop_manager.submit_loop_task_and_wait(
-            self._fetch_node_info(node_ip, heartbeat_message.service_port)
-        )
-        if node_info is not None:
-            node_info["ip"] = node_ip
-            self.update_node(node_info)
-
-    async def _fetch_node_info(self, node_ip: str, service_port: int) -> Any:
-        """Fetch full node information from a remote node.
-
-        Args:
-            node_ip: IP address of the remote node
-            service_port: Service port of the remote node
-        Returns:
-            Full NodeInfo from the remote node, or None on failure
-        """
-        # Placeholder for actual implementation to fetch node info
-        # This could involve making a network request to the remote node
-        # and retrieving its NodeInfo data.
-        _logger.info(f"Fetching node info from {node_ip}:{service_port}")
+        _logger.info(f"Fetching node info from {node_ip}:{heartbeat_message.service_port}")
         result = await send_request(
-            addr=f"tcp://{node_ip}:{service_port}",
+            addr=f"tcp://{node_ip}:{heartbeat_message.service_port}",
             service_name="get_node_info",
             request=None,
             timeout=0.3,
         )
-        return result
+        if result is not None:
+            node_info = cast(NodeInfo, result)
+            node_info["ip"] = node_ip
+            self.update_node(node_info)
 
     async def check_heartbeat(self, interval: float = 1.0) -> None:
         """Periodically check the heartbeat of nodes."""

@@ -198,6 +198,8 @@ async def send_bytes_request(
     addr: str, service_name: str, bytes_msgs: bytes, timeout: float
 ) -> Optional[List[bytes]]:
     """Send a bytes request to the specified address and return the response."""
+    response: Optional[List[bytes]] = None
+    sock: Optional[zmq.asyncio.Socket] = None
     try:
         sock = zmq.asyncio.Context.instance().socket(zmq.REQ)
         sock.connect(addr)
@@ -208,15 +210,14 @@ async def send_bytes_request(
         assert len(response) == 2, "Invalid response format"
     except asyncio.TimeoutError:
         _logger.error("Request %s timed out for %s s.", service_name, timeout)
-        response = None
     except Exception as e:
         _logger.error("Error sending request to %s: %s", addr, e)
         traceback.print_exc()
-        response = None
     finally:
-        sock.disconnect(addr)
-        sock.close()
-        return response
+        if sock is not None:
+            sock.disconnect(addr)
+            sock.close()
+    return response
 
 
 async def send_request(
