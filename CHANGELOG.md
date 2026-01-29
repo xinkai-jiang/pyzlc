@@ -4,10 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-01-29
+
+### Added
+- Add `submit_thread_pool_task` method to LanComLoopManager for submitting synchronous functions to the thread pool executor
+
+### Fixed
+- Fix bug in `handle_heartbeat` function
+
+## [2.0.1] - 2026-01-28
+
 ### Added
 - Create a short heartbeat message
+- Add more functions to `__all__` exports
 
 ### Changed
+- Change the init argument
 - Add group argument to init function
 
 ## [1.1.3] - 2026-01-25
