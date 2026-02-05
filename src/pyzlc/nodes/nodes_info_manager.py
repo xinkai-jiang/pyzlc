@@ -81,12 +81,6 @@ class NodesInfoManager:
 
     def register_local_publisher(self, topic_name: str, port: int) -> None:
         """Register a new topic locally."""
-        if self.check_local_topic(topic_name):
-            raise ValueError(f"Topic {topic_name} is already registered locally.")
-        if len(self.get_publisher_info(topic_name)) > 0:
-            raise ValueError(
-                f"Topic {topic_name} is already registered in the network."
-            )
         self.local_node_info["topics"].append(
             {"name": topic_name, "ip": self.local_node_info.get("ip"), "port": port}
         )
