@@ -52,6 +52,35 @@ class ServiceManager:
         self.callable_services[service_name] = self._wrap_handler(handler)
         _logger.info(f"Service '{service_name}' registered successfully.")
 
+    async def _handle_request(
+        self, service_name: str, request: bytes, services: dict[str, ServiceCallback]
+    ) -> tuple[bytes, bytes]:
+        """Handle a single service request and return (status, result)."""
+        if service_name not in services:
+            _logger.error(f"Service {service_name} is not available")
+            return ResponseStatus.NOSERVICE.encode(), b""
+        try:
+            result = await asyncio.wait_for(
+                self.loop_manager.run_in_executor(services[service_name], request),
+                timeout=2.0,
+            )
+            return ResponseStatus.SUCCESS.encode(), result or b""
+        except (asyncio.CancelledError, RuntimeError) as e:
+            if not self._running:
+                raise  # Re-raise to exit the loop
+            _logger.error(f"Error in service {service_name}: {e}")
+            return ResponseStatus.UNKNOWN_ERROR.encode(), b""
+        except asyncio.TimeoutError:
+            _logger.error("Timeout: callback function took too long")
+            return ResponseStatus.SERVICE_TIMEOUT.encode(), b""
+        except msgpack.ExtraData as e:
+            _logger.error(f"Message unpacking error: {e}")
+            return ResponseStatus.INVALID_REQUEST.encode(), b""
+        except Exception as e:
+            _logger.error(f"Error processing service {service_name}: {e}")
+            traceback.print_exc()
+            return ResponseStatus.UNKNOWN_ERROR.encode(), b""
+
     async def service_loop(
         self,
         _socket: AsyncSocket,
@@ -60,45 +89,18 @@ class ServiceManager:
         """Asynchronously handles incoming service requests."""
         while self._running:
             try:
-                event = await _socket.poll()
-                if not event:
+                if not await _socket.poll(timeout=100):
                     continue
                 name_bytes, request = await _socket.recv_multipart()
-            except Exception as e:
-                _logger.error(f"Error occurred when receiving request: {e}")
+                status, result = await self._handle_request(name_bytes.decode(), request, services)
+                await _socket.send_multipart([status, result])
+            except asyncio.CancelledError:
+                break
+            except (RuntimeError, Exception) as e:
+                if not self._running:
+                    break
+                _logger.error(f"Service loop error: {e}")
                 traceback.print_exc()
-                raise e
-            service_name = name_bytes.decode()
-            # _logger.debug(f"Received request for service: {service_name}")
-            if service_name not in services.keys():
-                _logger.error(f"Service {service_name} is not available")
-                continue
-            response_status: bytes = ResponseStatus.SUCCESS.encode()
-            packed_result: Optional[bytes] = None
-            try:
-                packed_result = await asyncio.wait_for(
-                    self.loop_manager.run_in_executor(services[service_name], request),
-                    timeout=2.0,
-                )
-            except asyncio.TimeoutError:
-                _logger.error("Timeout: callback function took too long")
-                response_status = ResponseStatus.SERVICE_TIMEOUT.encode()
-            except msgpack.ExtraData as e:
-                _logger.error(f"Message unpacking error: {e}")
-                response_status = ResponseStatus.INVALID_REQUEST.encode()
-            except Exception as e:
-                _logger.error(
-                    f"One error occurred when processing the Service {service_name}: {e}"
-                )
-                response_status = ResponseStatus.UNKNOWN_ERROR.encode()
-                traceback.print_exc()
-                raise e
-            try:
-                await _socket.send_multipart([response_status, packed_result or b""])
-            except Exception as e:
-                _logger.error(f"Error occurred when sending response: {e}")
-                traceback.print_exc()
-                raise e
         _logger.info("Service loop has been stopped")
 
     def stop(self) -> None:

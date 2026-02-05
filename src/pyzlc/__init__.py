@@ -59,9 +59,9 @@ __all__: List[str] = [
 def init(
     node_name: str,
     node_ip: str,
+    group_name: str = "zlc_default_group_name",
     group: str = "224.0.0.1",
     group_port: int = 7720,
-    group_name: str = "zlc_default_group_name",
 ) -> None:
     """Initialize the LanCom node singleton."""
     if LanComNode.instance is not None:

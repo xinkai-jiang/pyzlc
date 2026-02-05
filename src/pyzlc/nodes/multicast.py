@@ -9,6 +9,7 @@ from ..nodes.nodes_info_manager import NodesInfoManager
 from ..utils.log import _logger
 from ..utils.msg import _parse_version, is_in_same_subnet, HeartbeatMessage, decode_heartbeat_message
 from ..utils.node_info import NodeInfo
+from .loop_manager import LanComLoopManager
 
 
 class MulticastWorker:
@@ -127,6 +128,8 @@ class MulticastDiscoveryProtocol(asyncio.DatagramProtocol):
         self.local_node_id = multicast_worker.local_info["nodeID"]
         self.group_name = multicast_worker.group_name
         self.transport: Optional[asyncio.DatagramTransport] = None
+        self.loop_manager = LanComLoopManager.get_instance()
+        self.node_info_manager = NodesInfoManager.get_instance()
         
 
     def connection_made(self, transport: asyncio.DatagramTransport):
@@ -149,12 +152,13 @@ class MulticastDiscoveryProtocol(asyncio.DatagramProtocol):
             if heartbeat_message.node_id == self.local_node_id:
                 # _logger.debug("Ignoring own heartbeat message")
                 return
-            # Update node info manager with heartbeat
-            NodesInfoManager.get_instance().handle_heartbeat(heartbeat_message, node_ip)
+            # Update node info manager with heartbeat (submit async task to loop)
+            self.loop_manager.submit_loop_task(
+                self.node_info_manager.handle_heartbeat_async(heartbeat_message, node_ip)
+            )
         except Exception as e:
             _logger.error("Error processing datagram: %s", e)
             traceback.print_exc()
-            raise e
 
     def error_received(self, exc):
         _logger.error("Multicast protocol error: %s", exc)

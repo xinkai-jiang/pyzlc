@@ -2,7 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [2.0.3] - 2026-02-05
+
+### Changed
+- Remove the same name publisher error since zlc allows duplicate publisher names
+
+### Fixed
+- Resolve deadlock and improve error handling
 
 ## [2.0.2] - 2026-01-29
 
