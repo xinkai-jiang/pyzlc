@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Dict, List, Optional, Any, cast
+from typing import Dict, List, Optional, cast
 import time
 
 from ..utils.node_info import (
@@ -35,8 +35,9 @@ class NodesInfoManager:
         self.nodes_info: Dict[HashIdentifier, NodeInfo] = {}  # keyed by full nodeID
         self.nodes_info_id: Dict[HashIdentifier, int] = {}  # keyed by full nodeID
         self.nodes_heartbeat: Dict[HashIdentifier, float] = {}  # keyed by full nodeID
+        self.unreplyed_heartbeats: set[HashIdentifier] = set()  # keyed by nodeID hash
         # Map int32 node_hash to full nodeID for lookup
-        self._hash_to_node_id: Dict[int, HashIdentifier] = {}
+        # self._hash_to_node_id: Dict[int, HashIdentifier] = {}
         # self.local_name = local_name
         # self.local_ip = local_ip
         # self.local_node_id = create_hash_identifier()
@@ -161,15 +162,22 @@ class NodesInfoManager:
             node_ip: IP address of the remote node
         """
         self.nodes_heartbeat[heartbeat_message.node_id] = time.monotonic()
+        if heartbeat_message.node_id in self.unreplyed_heartbeats:
+            return
         if self.check_info(heartbeat_message.node_id, heartbeat_message.info_id):
             return
         _logger.info(f"Fetching node info from {node_ip}:{heartbeat_message.service_port}")
-        result = await send_request(
-            addr=f"tcp://{node_ip}:{heartbeat_message.service_port}",
-            service_name="get_node_info",
-            request=None,
-            timeout=0.3,
-        )
+        try:
+            result = await send_request(
+                addr=f"tcp://{node_ip}:{heartbeat_message.service_port}",
+                service_name="get_node_info",
+                request=None,
+                timeout=0.3,
+            )
+        except Exception as e:
+            _logger.error(f"Failed to fetch node info from {node_ip}:{heartbeat_message.service_port} - {e}")
+            self.unreplyed_heartbeats.add(heartbeat_message.node_id)
+            return
         if result is not None:
             node_info = cast(NodeInfo, result)
             node_info["ip"] = node_ip
