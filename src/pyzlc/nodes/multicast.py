@@ -1,13 +1,19 @@
 from __future__ import annotations
-import asyncio
+import select
 import socket
 import struct
+import threading
 import traceback
 from typing import Tuple, Optional
 
 from ..nodes.nodes_info_manager import NodesInfoManager
 from ..utils.log import _logger
-from ..utils.msg import _parse_version, is_in_same_subnet, HeartbeatMessage, decode_heartbeat_message
+from ..utils.msg import (
+    _parse_version,
+    is_in_same_subnet,
+    HeartbeatMessage,
+    decode_heartbeat_message,
+)
 from ..utils.node_info import NodeInfo
 from .loop_manager import LanComLoopManager
 
@@ -20,7 +26,7 @@ class MulticastWorker:
         service_port: int,
         group: str,
         group_port: int,
-        group_name: str
+        group_name: str,
     ) -> None:
         self.local_info = local_info
         self.local_ip = local_info["ip"]
@@ -30,18 +36,44 @@ class MulticastWorker:
         self.group_name = group_name
         self.protocol_version: Tuple[int, int, int] = _parse_version()
 
-    async def start(self):
-        """Start the multicast worker."""
-        self.running = True
-        await asyncio.gather(
-            self.multicast_loop(),
-            self.discovery_loop(),
+        # Threading support
+        self._stop_event = threading.Event()
+        self._sender_thread: Optional[threading.Thread] = None
+        self._receiver_thread: Optional[threading.Thread] = None
+        self.loop_manager: Optional[LanComLoopManager] = None
+        self.node_info_manager: Optional[NodesInfoManager] = None
+
+    def start(self):
+        """Start the multicast worker with separate threads for sending and receiving."""
+        self._stop_event.clear()
+        self.loop_manager = LanComLoopManager.get_instance()
+        self.node_info_manager = NodesInfoManager.get_instance()
+
+        self._sender_thread = threading.Thread(
+            target=self._multicast_loop, name="MulticastSender", daemon=True
+        )
+        self._receiver_thread = threading.Thread(
+            target=self._discovery_loop, name="MulticastReceiver", daemon=True
         )
 
+        self._sender_thread.start()
+        self._receiver_thread.start()
+        _logger.debug("Multicast worker started")
 
-    async def multicast_loop(self, interval=0.5):
-        """Send multicast heartbeat messages at regular intervals."""
+    def stop(self):
+        """Stop the multicast worker and wait for threads to finish."""
+        _logger.debug("Stopping multicast worker...")
+        self._stop_event.set()
 
+        if self._sender_thread and self._sender_thread.is_alive():
+            self._sender_thread.join(timeout=2.0)
+        if self._receiver_thread and self._receiver_thread.is_alive():
+            self._receiver_thread.join(timeout=2.0)
+
+        _logger.debug("Multicast worker stopped")
+
+    def _multicast_loop(self, interval: float = 0.5):
+        """Send multicast heartbeat messages at regular intervals (runs in thread)."""
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1)
@@ -49,7 +81,8 @@ class MulticastWorker:
             socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(self.local_ip)
         )
         _service_port = self.service_port
-        while self.running:
+
+        while not self._stop_event.is_set():
             try:
                 msg = HeartbeatMessage(
                     zlc_version=self.protocol_version,
@@ -59,27 +92,23 @@ class MulticastWorker:
                     group_name=self.group_name,
                 )
                 sock.sendto(msg.to_bytes(), (self.group, self.group_port))
-                await asyncio.sleep(interval)
-            except asyncio.CancelledError:
-                _logger.info("Multicast loop cancelled...")
-                break
+                # Wait for interval or until stop is signaled
+                self._stop_event.wait(timeout=interval)
             except Exception as e:
                 _logger.error("Error in multicast loop: %s", e)
                 traceback.print_exc()
-                raise e
-        sock.close()
-        _logger.info("Multicast heartbeat loop stopped")
-        
+                break
 
-    async def discovery_loop(self):
-        """Listen for multicast discovery messages and register nodes."""
-        # Create multicast socket
+        sock.close()
+        _logger.debug("Multicast heartbeat loop stopped")
+
+    def _discovery_loop(self):
+        """Listen for multicast discovery messages and register nodes (runs in thread)."""
+        sock: Optional[socket.socket] = None
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-            # Allow reuse of address
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-            # Bind to the port
             sock.bind(("", self.group_port))
             mreq = struct.pack(
                 "4s4s",
@@ -87,86 +116,60 @@ class MulticastWorker:
                 socket.inet_aton(self.local_ip),
             )
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-            _logger.info(
+            _logger.debug(
                 "Listening for multicast on %s:%s", self.group, self.group_port
             )
-            # Get event loop and create datagram endpoint
-            loop = asyncio.get_event_loop()
-            # Create the datagram endpoint with the protocol
-            self.discovery_transport, _ = await loop.create_datagram_endpoint(
-                lambda: MulticastDiscoveryProtocol(self), sock=sock
-            )
-            await asyncio.Future()
-        except asyncio.CancelledError:
-            _logger.info("Discovery loop cancelled...")
+
+            while not self._stop_event.is_set():
+                # Use select to wait for data with timeout
+                readable, _, _ = select.select([sock], [], [], 0.5)
+                if not readable:
+                    continue
+
+                try:
+                    data, addr = sock.recvfrom(1024)
+                    self._handle_datagram(data, addr)
+                except socket.error as e:
+                    if not self._stop_event.is_set():
+                        _logger.error("Socket error in discovery loop: %s", e)
         except Exception as e:
             _logger.error("Error in discovery loop: %s", e)
             traceback.print_exc()
-            raise e
-        try:
-            if self.discovery_transport:
-                self.discovery_transport.close()
-            sock.close()
-            _logger.info("Multicast discovery loop stopped")
-        except RuntimeWarning as e:
-            _logger.error("Error closing discovery socket: %s", e)
-        except Exception as e:
-            _logger.error("Unexpected error when closing discovery socket: %s", e)
-            traceback.print_exc()
-            raise e
+        finally:
+            if sock:
+                try:
+                    sock.close()
+                except Exception as e:
+                    _logger.error("Error closing discovery socket: %s", e)
+            _logger.debug("Multicast discovery loop stopped")
 
-
-
-# NOTE: asyncio.loop.sock_recvfrom can only be used after Python 3.11
-# So we create a custom DatagramProtocol for multicast discovery
-class MulticastDiscoveryProtocol(asyncio.DatagramProtocol):
-    """DatagramProtocol for handling multicast discovery messages"""
-
-    def __init__(self, multicast_worker: MulticastWorker):
-        # self.loop_manager = node_manager.loop_manager
-        self.local_ip = multicast_worker.local_ip
-        self.local_node_id = multicast_worker.local_info["nodeID"]
-        self.group_name = multicast_worker.group_name
-        self.transport: Optional[asyncio.DatagramTransport] = None
-        self.loop_manager = LanComLoopManager.get_instance()
-        self.node_info_manager = NodesInfoManager.get_instance()
-        
-
-    def connection_made(self, transport: asyncio.DatagramTransport):
-        self.transport = transport
-        _logger.info("Multicast discovery connection established")
-
-    def datagram_received(self, data: bytes, addr: Tuple[str, int]):
-        """Handle incoming multicast discovery messages"""
+    def _handle_datagram(self, data: bytes, addr: Tuple[str, int]):
+        """Handle incoming multicast discovery messages."""
         try:
             node_ip = addr[0]
             if not is_in_same_subnet(self.local_ip, node_ip):
                 return
-            # Decode the lightweight heartbeat message
+
             heartbeat_message = decode_heartbeat_message(data)
-            # Filter by group name
-            if heartbeat_message is None or heartbeat_message.group_name != self.group_name:
-                # _logger.debug("Ignoring heartbeat with different group name: %s", heartbeat_message.group_name)
+            if (
+                heartbeat_message is None
+                or heartbeat_message.group_name != self.group_name
+            ):
                 return
-            # Ignore own heartbeat (compare int32 hashes)
-            if heartbeat_message.node_id == self.local_node_id:
-                # _logger.debug("Ignoring own heartbeat message")
+
+            if heartbeat_message.node_id == self.local_info["nodeID"]:
                 return
-            # Update node info manager with heartbeat (submit async task to loop)
+            if self.loop_manager is None or self.node_info_manager is None:
+                _logger.warning(
+                    "Loop manager or node info manager not initialized yet, skipping datagram"
+                )
+                return
+            # Submit async task to event loop (preserving async chain)
             self.loop_manager.submit_loop_task(
-                self.node_info_manager.handle_heartbeat_async(heartbeat_message, node_ip)
+                self.node_info_manager.handle_heartbeat_async(
+                    heartbeat_message, node_ip
+                )
             )
         except Exception as e:
             _logger.error("Error processing datagram: %s", e)
             traceback.print_exc()
-
-    def error_received(self, exc):
-        _logger.error("Multicast protocol error: %s", exc)
-
-    def connection_lost(self, exc):
-        if exc:
-            _logger.error("Multicast connection lost: %s", exc)
-        else:
-            _logger.error("Multicast discovery connection closed")
-
-

@@ -101,11 +101,11 @@ class ServiceManager:
                     break
                 _logger.error(f"Service loop error: {e}")
                 traceback.print_exc()
-        _logger.info("Service loop has been stopped")
+        _logger.debug("Service loop has been stopped")
 
     def stop(self) -> None:
         """Stop the service manager and close the socket."""
         self._running = False
         self.res_socket.close()
         self.service_loop_future.cancel()
-        _logger.info("ServiceManager has been stopped")
+        _logger.debug("ServiceManager has been stopped")
