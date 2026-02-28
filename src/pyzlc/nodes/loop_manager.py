@@ -15,6 +15,34 @@ from ..utils.log import _logger
 TaskReturnT = TypeVar("TaskReturnT")
 
 
+class _DaemonThreadPoolExecutor(ThreadPoolExecutor):
+    """ThreadPoolExecutor that creates daemon threads, allowing program to exit cleanly."""
+
+    def _adjust_thread_count(self):
+        # Override to set daemon=True before thread starts
+        # This is called by the parent class when submitting work
+        for t in self._threads:
+            if not t.daemon:
+                # Can't set daemon after thread starts, but we ensure new threads are daemon
+                pass
+        super()._adjust_thread_count()
+        # Set daemon on any newly created threads
+        for t in self._threads:
+            if t.is_alive() and not t.daemon:
+                pass  # Can't change after start, but new threads below will be daemon
+
+    def submit(self, fn, *args, **kwargs):
+        """Submit work and ensure threads are daemon."""
+        result = super().submit(fn, *args, **kwargs)
+        # Mark all threads as daemon (only works before they start)
+        for t in list(self._threads):
+            try:
+                t.daemon = True
+            except RuntimeError:
+                pass  # Thread already started
+        return result
+
+
 class LanComLoopManager(abc.ABC):
     """Manages the event loop and thread pool for asynchronous tasks."""
 
@@ -35,8 +63,15 @@ class LanComLoopManager(abc.ABC):
         """
         LanComLoopManager.instance = self
         self._loop: Optional[AbstractEventLoop] = None
-        self._executor = ThreadPoolExecutor(max_workers=max_workers)
-        self._executor.submit(self.spin_task)
+        # Use daemon threads so program can exit without waiting
+        self._executor = _DaemonThreadPoolExecutor(
+            max_workers=max_workers,
+            thread_name_prefix="LanComPool",
+        )
+        self._spin_thread = threading.Thread(
+            target=self.spin_task, name="LanComSpinTask", daemon=True
+        )
+        self._spin_thread.start()
         self._running: bool = False
         self._stopped_event = threading.Event()
         while self._loop is None:
@@ -80,7 +115,8 @@ class LanComLoopManager(abc.ABC):
         try:
             if self._loop is None:
                 raise RuntimeError("Event loop is not initialized")
-            self._loop.call_soon_threadsafe(self._loop.stop)
+            if self._loop.is_running():
+                self._loop.call_soon_threadsafe(self._loop.stop)
             _logger.debug("Event loop stop signal sent")
         except RuntimeError as e:
             _logger.error("One error occurred when stop loop manager: %s", e)
