@@ -41,8 +41,7 @@ class CustomFormatter(logging.Formatter):
 
 def get_logger():
     """Create and return a custom logger"""
-    # logger = logging.getLogger("SimPublisher")
-    logger_ = CustomLogger("SimPublisher")
+    logger_ = CustomLogger("LanComLogger")
     logger_.setLevel(logging.DEBUG)
 
     # Create console handler and set level

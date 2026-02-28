@@ -52,8 +52,8 @@ class LanComNode:
         self.group_port = group_port
         self.group_name = group_name
         self.zmq_socket_manager: ZMQSocketManager = ZMQSocketManager()
+        self.loop_manager: LanComLoopManager = LanComLoopManager().get_instance()
         self.nodes_manager: NodesInfoManager = NodesInfoManager(node_name, node_ip)
-        self.loop_manager: LanComLoopManager = LanComLoopManager()
         self.service_manager = ServiceManager(f"tcp://{self.node_ip}:0")
         self.subscriber_manager = SubscriberManager()
         self.multicast_worker = MulticastWorker(
@@ -66,12 +66,11 @@ class LanComNode:
 
     def start_node(self):
         """Start the node's operations."""
-        _logger.info("Starting LanCom node...")
+        _logger.debug("Starting LanCom node...")
         self.running: bool = True
-        # add tasks to the event loop
-        self.multicast_future = self.loop_manager.submit_loop_task(
-            self.multicast_worker.start()
-        )
+        # Start multicast worker (runs in separate threads)
+        self.multicast_worker.start()
+        # Add async heartbeat check to the event loop
         self.heartbeat_future = self.loop_manager.submit_loop_task(
             self.nodes_manager.check_heartbeat()
         )
@@ -81,10 +80,10 @@ class LanComNode:
 
     def stop_node(self):
         """Stop the node's operations."""
-        _logger.info("Stopping LanCom node...")
+        _logger.debug("Stopping LanCom node...")
         self.running = False
         self.service_manager.stop()
-        self.multicast_future.cancel()
+        self.multicast_worker.stop()
         self.heartbeat_future.cancel()
         self.loop_manager.stop()
-        _logger.info("LanCom node has been stopped")
+        _logger.debug("LanCom node has been stopped")

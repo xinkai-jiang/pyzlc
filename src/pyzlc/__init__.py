@@ -10,6 +10,7 @@ import platform
 from typing import Callable, Any, Optional, List, Coroutine
 import time
 import concurrent.futures
+import logging
 
 from .nodes.lancom_node import LanComNode
 from .nodes.nodes_info_manager import NodeInfo, NodesInfoManager
@@ -62,7 +63,9 @@ def init(
     group_name: str = "zlc_default_group_name",
     group: str = "224.0.0.1",
     group_port: int = 7720,
+    log_level: int = logging.INFO,
 ) -> None:
+    set_log_level(log_level)
     """Initialize the LanCom node singleton."""
     if LanComNode.instance is not None:
         raise ValueError("Node is already initialized.")
@@ -71,6 +74,10 @@ def init(
         "get_node_info", LanComNode.get_instance()._get_node_info_handler
     )
     LanComNode.get_instance().start_node()
+
+def set_log_level(level: int) -> None:
+    """Set the logging level for the LanCom logger."""
+    _logger.setLevel(level)
 
 def shutdown() -> None:
     """Shutdown the LanCom node."""
@@ -105,8 +112,6 @@ def spin() -> None:
     except KeyboardInterrupt:
         _logger.debug("LanCom node interrupted by user")
         LanComNode.get_instance().stop_node()
-    finally:
-        _logger.info("LanCom node has been stopped")
 
 
 def call(
