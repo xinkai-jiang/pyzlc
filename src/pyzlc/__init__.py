@@ -9,10 +9,9 @@ from __future__ import annotations
 import asyncio
 import atexit
 import platform
-from typing import Callable, Any, Optional, List, Coroutine
+from typing import Callable, Any, Optional, List, Coroutine, Union
 import time
 import concurrent.futures
-import logging
 
 from .nodes.lancom_node import LanComNode
 from .nodes.nodes_info_manager import NodeInfo, NodesInfoManager
@@ -20,7 +19,7 @@ from .nodes.loop_manager import LanComLoopManager, TaskReturnT
 from .sockets.service_client import zlc_request_async, zlc_request
 from .sockets.publisher import Publisher, Streamer
 from .utils.msg import Empty, empty, _get_zlc_version
-from .utils.log import _logger
+from .utils.log import _logger, LogLevel
 
 
 # Fix for Windows event loop to avoid ZMQ warnings
@@ -51,11 +50,11 @@ __all__: List[str] = [
     "submit_loop_task",
     "empty",
     "Empty",
+    "LogLevel",
     "info",
     "debug",
     "warning",
     "error",
-    "remote_log",
 ]
 
 
@@ -65,7 +64,7 @@ def init(
     group_name: str = "zlc_default_group_name",
     group: str = "224.0.0.1",
     group_port: int = 7720,
-    log_level: int = logging.INFO,
+    log_level: Union[LogLevel, int] = LogLevel.INFO,
 ) -> None:
     set_log_level(log_level)
     """Initialize the LanCom node singleton."""
@@ -81,9 +80,9 @@ def init(
     atexit.register(shutdown)
 
 
-def set_log_level(level: int) -> None:
+def set_log_level(level: Union[LogLevel, int]) -> None:
     """Set the logging level for the LanCom logger."""
-    _logger.setLevel(level)
+    _logger.setLevel(int(level))
 
 
 def shutdown() -> None:
@@ -227,4 +226,3 @@ info = _logger.info
 debug = _logger.debug
 warning = _logger.warning
 error = _logger.error
-remote_log = _logger.remote_log

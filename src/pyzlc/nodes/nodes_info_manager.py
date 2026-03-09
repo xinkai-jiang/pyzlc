@@ -166,7 +166,7 @@ class NodesInfoManager:
             return
         if self.check_info(heartbeat_message.node_id, heartbeat_message.info_id):
             return
-        _logger.info(f"Fetching node info from {node_ip}:{heartbeat_message.service_port}")
+        _logger.debug(f"Fetching node info from {node_ip}:{heartbeat_message.service_port}")
         try:
             result = await send_request(
                 addr=f"tcp://{node_ip}:{heartbeat_message.service_port}",
@@ -182,6 +182,7 @@ class NodesInfoManager:
             node_info = cast(NodeInfo, result)
             node_info["ip"] = node_ip
             self.update_node(node_info)
+            _logger.debug(f"Updated node info for {node_info['name']} ({node_ip})")
 
     async def check_heartbeat(self, interval: float = 1.0) -> None:
         """Periodically check the heartbeat of nodes."""

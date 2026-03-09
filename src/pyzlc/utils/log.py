@@ -1,21 +1,19 @@
 import logging
+from enum import IntEnum
 
 from colorama import Fore, init
 
 init(autoreset=True)
 
-# Define a new log level
-REMOTE_LOG_LEVEL_NUM = 25
-logging.addLevelName(REMOTE_LOG_LEVEL_NUM, "REMOTELOG")
 
+class LogLevel(IntEnum):
+    """Log levels for pyzlc logging."""
 
-class CustomLogger(logging.Logger):
-    """Custom logger class to add remote_log method"""
-
-    def remote_log(self, message, *args, **kws):
-        """Log a message with REMOTELOG level"""
-        if self.isEnabledFor(REMOTE_LOG_LEVEL_NUM):
-            self._log(REMOTE_LOG_LEVEL_NUM, message, args, **kws)
+    DEBUG = logging.DEBUG
+    INFO = logging.INFO
+    WARNING = logging.WARNING
+    ERROR = logging.ERROR
+    CRITICAL = logging.CRITICAL
 
 
 class CustomFormatter(logging.Formatter):
@@ -29,8 +27,6 @@ class CustomFormatter(logging.Formatter):
         logging.WARNING: Fore.RED + FORMAT + Fore.RESET,
         logging.ERROR: Fore.MAGENTA + FORMAT + Fore.RESET,
         logging.CRITICAL: Fore.CYAN + FORMAT + Fore.RESET,
-        # Add custom level format
-        REMOTE_LOG_LEVEL_NUM: Fore.GREEN + FORMAT + Fore.RESET,
     }
 
     def format(self, record):
@@ -41,7 +37,7 @@ class CustomFormatter(logging.Formatter):
 
 def get_logger():
     """Create and return a custom logger"""
-    logger_ = CustomLogger("LanComLogger")
+    logger_ = logging.Logger("LanComLogger")
     logger_.setLevel(logging.DEBUG)
 
     # Create console handler and set level
