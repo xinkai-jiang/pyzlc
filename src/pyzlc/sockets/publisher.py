@@ -2,29 +2,30 @@ from __future__ import annotations
 import time
 import traceback
 from asyncio import sleep as async_sleep
-from typing import Callable
+from typing import Callable, Optional
 
 import zmq
 import msgpack
 
 from ..nodes.zmq_socket_manager import ZMQSocketManager
 from ..utils.log import _logger
-from ..nodes.loop_manager import LanComLoopManager
-from ..nodes.nodes_info_manager import NodesInfoManager
+from ..nodes.lancom_node import LanComNode
 from ..utils.msg import MessageT, get_socket_addr
 
 
 class Publisher:
     """Publishes messages to a topic."""
 
-    def __init__(self, topic_name: str):
+    def __init__(self, topic_name: str, group_name: Optional[str] = None):
         self.name = topic_name
-        self.loop_manager = LanComLoopManager.get_instance()
-        local_node_info = NodesInfoManager.get_instance().local_node_info
+        node = LanComNode.get_instance(group_name)
+        self.loop_manager = node.loop_manager
+        nodes_info_manager = node.nodes_info_manager
+        local_node_info = nodes_info_manager.local_node_info
         self._socket = ZMQSocketManager.get_instance().create_socket(zmq.PUB)
         self._socket.bind(f"tcp://{local_node_info['ip']}:0")
         self.url, self.port = get_socket_addr(self._socket)
-        NodesInfoManager.get_instance().register_local_publisher(self.name, self.port)
+        nodes_info_manager.register_local_publisher(self.name, self.port)
 
     def publish(self, msg: MessageT) -> None:
         """Publish a message in bytes."""
@@ -45,8 +46,9 @@ class Streamer(Publisher):
         update_func: Callable[[], MessageT],
         fps: int,
         start_streaming: bool = False,
+        group_name: Optional[str] = None,
     ):
-        super().__init__(topic_name)
+        super().__init__(topic_name, group_name)
         self.running = False
         self.dt: float = 1 / fps
         self.update_func = update_func

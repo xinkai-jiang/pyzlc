@@ -15,8 +15,38 @@ from ..utils.log import _logger
 TaskReturnT = TypeVar("TaskReturnT")
 
 
-class _DaemonThreadPoolExecutor(ThreadPoolExecutor):
+class DaemonThreadPoolExecutor(ThreadPoolExecutor):
     """ThreadPoolExecutor that creates daemon threads, allowing program to exit cleanly."""
+
+    _instance: Optional[DaemonThreadPoolExecutor] = None
+
+    @classmethod
+    def get_instance(cls, max_workers: int = 3) -> DaemonThreadPoolExecutor:
+        """Get the singleton instance of DaemonThreadPoolExecutor."""
+        if cls._instance is None:
+            executor = DaemonThreadPoolExecutor(
+                max_workers=max_workers,
+                thread_name_prefix="LanComPool",
+            )
+            cls._instance = executor
+        return cls._instance
+
+    @classmethod
+    def submit_thread_pool_task(
+        cls, func: Callable[..., TaskReturnT], *args: Any
+    ) -> concurrent.futures.Future:
+        """Submit a synchronous function to the thread pool executor.
+
+        Args:
+            func: The callable to run.
+            *args: Positional arguments for the function.
+
+        Returns:
+            concurrent.futures.Future: A future representing the execution of the function.
+        """
+        if cls._instance is None:
+            raise RuntimeError("Thread pool executor is not initialized")
+        return cls._instance.submit(func, *args)
 
     def _adjust_thread_count(self):
         # Override to set daemon=True before thread starts
@@ -46,14 +76,14 @@ class _DaemonThreadPoolExecutor(ThreadPoolExecutor):
 class LanComLoopManager(abc.ABC):
     """Manages the event loop and thread pool for asynchronous tasks."""
 
-    instance: Optional[LanComLoopManager] = None
+    # instance: Optional[LanComLoopManager] = None
 
-    @classmethod
-    def get_instance(cls) -> LanComLoopManager:
-        """Get the singleton instance of LanComLoopManager."""
-        if cls.instance is None:
-            cls.instance = cls()
-        return cls.instance
+    # @classmethod
+    # def get_instance(cls) -> LanComLoopManager:
+    #     """Get the singleton instance of LanComLoopManager."""
+    #     if cls.instance is None:
+    #         cls.instance = cls()
+    #     return cls.instance
 
     def __init__(self, max_workers: int = 3):
         """Initialize the LanComLoopManager with a thread pool executor.
@@ -61,13 +91,10 @@ class LanComLoopManager(abc.ABC):
         Args:
             max_workers (int, optional): The maximum number of worker threads. Defaults to 3.
         """
-        LanComLoopManager.instance = self
+        # LanComLoopManager.instance = self
         self._loop: Optional[AbstractEventLoop] = None
         # Use daemon threads so program can exit without waiting
-        self._executor = _DaemonThreadPoolExecutor(
-            max_workers=max_workers,
-            thread_name_prefix="LanComPool",
-        )
+        self._executor = DaemonThreadPoolExecutor.get_instance(max_workers=max_workers)
         self._spin_thread = threading.Thread(
             target=self.spin_task, name="LanComSpinTask", daemon=True
         )
@@ -195,18 +222,3 @@ class LanComLoopManager(abc.ABC):
         future = asyncio.run_coroutine_threadsafe(task, self._loop)
         return future.result()
 
-    def submit_thread_pool_task(
-        self, func: Callable[..., TaskReturnT], *args: Any
-    ) -> concurrent.futures.Future:
-        """Submit a synchronous function to the thread pool executor.
-
-        Args:
-            func: The callable to run.
-            *args: Positional arguments for the function.
-
-        Returns:
-            concurrent.futures.Future: A future representing the execution of the function.
-        """
-        if self._executor is None:
-            raise RuntimeError("Thread pool executor is not initialized")
-        return self._executor.submit(func, *args)

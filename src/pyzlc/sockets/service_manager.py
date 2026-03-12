@@ -17,7 +17,7 @@ ServiceCallback = Callable[[bytes], Optional[bytes]]
 class ServiceManager:
     """Manages services using a REP socket."""
 
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, loop_manager: LanComLoopManager) -> None:
         """Initialize the ServiceManager with a REP socket."""
         self.res_socket: AsyncSocket = zmq.asyncio.Context.instance().socket(zmq.REP)
         self.callable_services: Dict[str, ServiceCallback] = {}
@@ -25,7 +25,7 @@ class ServiceManager:
         url, self.port = get_socket_addr(self.res_socket)
         _logger.info("ServiceManager REP socket bound to %s", url)
         self._running: bool = True
-        self.loop_manager = LanComLoopManager.get_instance()
+        self.loop_manager = loop_manager
         self.service_loop_future = self.loop_manager.submit_loop_task(
             self.service_loop(self.res_socket, self.callable_services)
         )

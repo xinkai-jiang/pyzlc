@@ -27,6 +27,8 @@ class MulticastWorker:
         group: str,
         group_port: int,
         group_name: str,
+        loop_manager: LanComLoopManager,
+        nodes_info_manager: NodesInfoManager,
     ) -> None:
         self.local_info = local_info
         self.local_ip = local_info["ip"]
@@ -40,14 +42,12 @@ class MulticastWorker:
         self._stop_event = threading.Event()
         self._sender_thread: Optional[threading.Thread] = None
         self._receiver_thread: Optional[threading.Thread] = None
-        self.loop_manager: Optional[LanComLoopManager] = None
-        self.node_info_manager: Optional[NodesInfoManager] = None
+        self.loop_manager: LanComLoopManager = loop_manager
+        self.node_info_manager: NodesInfoManager = nodes_info_manager
 
     def start(self):
         """Start the multicast worker with separate threads for sending and receiving."""
         self._stop_event.clear()
-        self.loop_manager = LanComLoopManager.get_instance()
-        self.node_info_manager = NodesInfoManager.get_instance()
 
         self._sender_thread = threading.Thread(
             target=self._multicast_loop, name="MulticastSender", daemon=True

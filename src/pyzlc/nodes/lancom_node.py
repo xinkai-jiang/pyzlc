@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Dict
 
 from .loop_manager import LanComLoopManager
 from .multicast import MulticastWorker
@@ -16,14 +16,32 @@ from ..utils.node_info import NodeInfo
 class LanComNode:
     """Represents a LanCom node in the network."""
 
-    instance: Optional[LanComNode] = None
+    default_instance: Optional[LanComNode] = None
+    node_instances: Dict[str, LanComNode] = {}
 
     @classmethod
-    def get_instance(cls) -> LanComNode:
+    def get(cls, group_name: Optional[str] = None) -> Optional[LanComNode]:
         """Get the singleton instance of LanComNode."""
-        if cls.instance is None:
-            raise ValueError("LanComNode is not initialized yet.")
-        return cls.instance
+        if group_name is None:
+            return cls.default_instance
+        else:
+            return cls.node_instances.get(group_name)
+
+    @classmethod
+    def get_instance(cls, group_name: Optional[str] = None) -> LanComNode:
+        """Get the singleton instance of LanComNode, raise error if not initialized."""
+        node = cls.get(group_name)
+        if node is None:
+            raise ValueError("LanComNode is not initialized. Please call init() first.")
+        return node
+
+    @classmethod
+    def stop_all_nodes(cls):
+        """Stop all LanCom nodes, including sub-group nodes."""
+        for group_name, node in cls.node_instances.items():
+            node.stop_node()
+            _logger.debug(f"Sub-node for group '{group_name}' has been stopped.")
+        cls.node_instances.clear()
 
     @classmethod
     def init(
@@ -33,9 +51,24 @@ class LanComNode:
         group: str,
         group_port: int,
         group_name: str,
+        sub_group: bool = False,
     ) -> None:
-        if cls.instance is None:
-            cls.instance = LanComNode(node_name, node_ip, group, group_port, group_name)
+        if group_name in cls.node_instances:
+            raise ValueError(
+                f"Node for group '{group_name}' is already initialized."
+            )
+        else:
+            cls.node_instances[group_name] = LanComNode(
+                node_name, node_ip, group, group_port, group_name
+            )
+        if not sub_group:
+            if cls.default_instance is None:
+                cls.default_instance = cls.node_instances[group_name]
+            else:
+                _logger.warning(
+                    "Default LanComNode instance is already set. "
+                    "The first initialized node will be used as the default instance."
+                )
 
     def __init__(
         self,
@@ -45,23 +78,28 @@ class LanComNode:
         group_port: int,
         group_name: str,
     ) -> None:
-        LanComNode.instance = self
         self.name = node_name
         self.node_ip = node_ip
         self.group = group
         self.group_port = group_port
         self.group_name = group_name
         self.zmq_socket_manager: ZMQSocketManager = ZMQSocketManager()
-        self.loop_manager: LanComLoopManager = LanComLoopManager().get_instance()
-        self.nodes_manager: NodesInfoManager = NodesInfoManager(node_name, node_ip)
-        self.service_manager = ServiceManager(f"tcp://{self.node_ip}:0")
-        self.subscriber_manager = SubscriberManager()
+        self.loop_manager: LanComLoopManager = LanComLoopManager()
+        self.nodes_info_manager: NodesInfoManager = NodesInfoManager(
+            node_name, node_ip, self.loop_manager
+        )
+        self.service_manager = ServiceManager(
+            f"tcp://{self.node_ip}:0", self.loop_manager
+        )
+        self.subscriber_manager = SubscriberManager(self.loop_manager, self.nodes_info_manager)
         self.multicast_worker = MulticastWorker(
-            local_info=self.nodes_manager.local_node_info,
+            local_info=self.nodes_info_manager.local_node_info,
             service_port=self.service_manager.port,
             group=self.group,
             group_port=self.group_port,
             group_name=self.group_name,
+            loop_manager=self.loop_manager,
+            nodes_info_manager=self.nodes_info_manager,
         )
 
     def start_node(self):
@@ -72,11 +110,11 @@ class LanComNode:
         self.multicast_worker.start()
         # Add async heartbeat check to the event loop
         self.heartbeat_future = self.loop_manager.submit_loop_task(
-            self.nodes_manager.check_heartbeat()
+            self.nodes_info_manager.check_heartbeat()
         )
 
     def _get_node_info_handler(self, request: Empty) -> NodeInfo:
-        return self.nodes_manager.local_node_info
+        return self.nodes_info_manager.local_node_info
 
     def stop_node(self):
         """Stop the node's operations."""

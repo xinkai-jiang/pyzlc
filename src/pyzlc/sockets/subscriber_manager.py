@@ -7,9 +7,8 @@ import msgpack
 
 from ..nodes.zmq_socket_manager import ZMQSocketManager
 from ..utils.log import _logger
-from ..nodes.nodes_info_manager import NodesInfoManager
 from ..nodes.loop_manager import LanComLoopManager
-
+from ..nodes.nodes_info_manager import NodesInfoManager
 
 class Subscriber:
     """Subscribes to messages from a topic."""
@@ -18,9 +17,12 @@ class Subscriber:
         self,
         topic_name: str,
         callback: Callable[[Any], None],
+        nodes_info_manager: NodesInfoManager,
+        loop_manager: LanComLoopManager,
+        group_name: Optional[str] = None,
     ):
-        self.nodes_manager = NodesInfoManager.get_instance()
-        self.loop_manager = LanComLoopManager.get_instance()
+        self.nodes_info_manager = nodes_info_manager
+        self.loop_manager = loop_manager
         self._socket = ZMQSocketManager.get_instance().create_async_socket(zmq.SUB)
         self._socket.setsockopt_string(zmq.SUBSCRIBE, "")
         self.name = topic_name
@@ -39,14 +41,16 @@ class Subscriber:
         self.published_urls.append(url)
         _logger.info("Subscriber %s is connected to %s", self.name, url)
         if len(self.published_urls) == 1:
-            self._receive_future = self.loop_manager.submit_loop_task(self.receive_loop())
+            self._receive_future = self.loop_manager.submit_loop_task(
+                self.receive_loop()
+            )
 
     async def listen_loop(self) -> None:
         """Listens for new publishers and connects to them."""
         _logger.info("Subscriber %s is listening ...", self.name)
         while self.running:
             try:
-                publishers = self.nodes_manager.get_publisher_info(self.name)
+                publishers = self.nodes_info_manager.get_publisher_info(self.name)
                 for pub_info in publishers:
                     _url = f"tcp://{pub_info['ip']}:{pub_info['port']}"
                     if _url not in self.published_urls:
@@ -92,13 +96,14 @@ class Subscriber:
 class SubscriberManager:
     """Manages multiple subscribers."""
 
-    def __init__(self):
+    def __init__(self, loop_manager: LanComLoopManager, nodes_info_manager: NodesInfoManager) -> None:
         self.subscribers: List[Subscriber] = []
-        self.loop_manager = LanComLoopManager.get_instance()
+        self.loop_manager = loop_manager
+        self.nodes_info_manager = nodes_info_manager
 
     def add_subscriber(self, topic_name: str, callback: Callable[[Any], None]) -> None:
         """Add a new subscriber and start its listening and receiving loops."""
-        subscriber = Subscriber(topic_name, callback)
+        subscriber = Subscriber(topic_name, callback, self.nodes_info_manager, self.loop_manager)
         self.subscribers.append(subscriber)
 
     def on_shutdown(self) -> None:

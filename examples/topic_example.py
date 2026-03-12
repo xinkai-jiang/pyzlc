@@ -16,7 +16,7 @@ if __name__ == "__main__":
     pyzlc.register_subscriber_handler(
         "example_topic", create_topic_callback("example_topic")
     )
-    while pyzlc.LanComNode.get_instance().running:
+    while pyzlc.is_running():
         publisher.publish("Hello, pyzlc!")
         pyzlc.info("Published message to topic 'example_topic'")
         pyzlc.sleep(1)
