@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.0] - 2026-03-15
+
+### Added
+- Group-based instance management for `LanComNode` and related components
+
+### Changed
+- Refactor `LanComNode`, `LanComLoopManager`, `NodesInfoManager`, and socket components for group-based instance management
+- Enhance thread pool executor capabilities
+- Enhance logging functionality and update log level handling
+
+## [2.1.0] - 2026-02-28
+
+### Added
+- Implement daemon thread pool executor for clean program exit
+
+### Changed
+- Restructure multicast worker for threading support
+- Improve logging
+
 ## [2.0.3] - 2026-02-05
 
 ### Changed
